@@ -36,12 +36,12 @@ static const unsigned int rotate_amounts_arr[] = {
 
 bool compare_md5(const unsigned char *hash_arr1, const unsigned char *hash_arr2); //Функция для сравнения двух MD5 хешей
 void md5(const unsigned char *input_str, int input_len, unsigned char *hash); //Процедура для расчета MD5
-bool hash_selection(char* input_hash); //Процедура для подбора хеша
-void* str_read(char* input_hash); //Процедура для считывания входной строки
-void* bad_pass_read(char* input_hash); //Дублирование процедуры для считывания входной строки
+void hash_selection(char* input_hash); //Процедура для подбора хеша
+void str_read(char* input_hash); //Процедура для считывания входной строки
+void bad_pass_read(char* input_hash); //Дублирование процедуры для считывания входной строки
 
 bool save_print(char* hex_str); //Функция для вывода HEX-строк
-bool decode(char* res_str, char* hex_str); //Функция для дешифровки HEX-строк
+void decode(char* res_str, char* hex_str); //Функция для дешифровки HEX-строк
 unsigned char hex_char_to_val(char symb); //Функция для преобразования HEX в ASCII
 bool password_read(); //Функция для считывания пароля из файла
 bool serial_gen(); //Функция для генерации серийного номера
@@ -165,7 +165,7 @@ void md5(const unsigned char *input_str, int input_len, unsigned char *hash) {
     }
 }
 //Процедура для подбора хеша
-bool hash_selection(char* input_hash){
+void hash_selection(char* input_hash){
     //Преобразование входной строки в массив из 16 байт
     unsigned char input_hash_bytes[16];
     for(int i = 0; i < 16; i++) {
@@ -176,7 +176,7 @@ bool hash_selection(char* input_hash){
     //char* filename = NULL;
     char filename[MAX_LEN] = {0};
     char hex_name[] = "557C69676479747532363535353535353533797D79"; //Pwdb_top-10000000.txt
-    if(decode(filename, hex_name)) return 1;
+    decode(filename, hex_name);
 
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
@@ -233,28 +233,27 @@ bool hash_selection(char* input_hash){
     }
     //Если строка не найдена
     if (!found) {
-        save_print("4E736B743F25556678787C74776925737479256B747A73693F25"); //Info: Password not found: 
+        save_print("4E736B743F25556678787C747769256B747A736925"); //Info: Password not found
     }
     free(file_str);
     fclose(file);
-    return 0;
 }
 //Процедура для считывания входной строки
-void* str_read(char* input_hash){
+void str_read(char* input_hash){
     save_print("4A73796A7725796D6A256D66786D3F25"); //Info: Enter the hash:
-    if(password_read()){
-        bad_pass_read(input_hash);
-    }
-    else{
+    //if(password_read()){
+        //bad_pass_read(input_hash);
+    //}
+    //else{
         //Считывание не более 32 символов
         scanf("%32s", input_hash); 
         if(strlen(input_hash) != 32){
             exit(1);
         }
-    }
+    //}
 }
 //Дублирование процедуры для считывания входной строки
-void* bad_pass_read(char* input_hash){
+void bad_pass_read(char* input_hash){
     //Считывание не более 32 символов
     scanf("%32s", input_hash); 
     if(strlen(input_hash) != 32){
@@ -264,19 +263,12 @@ void* bad_pass_read(char* input_hash){
 
 //Функция для вывода HEX-строк
 bool save_print(char* hex_str){
-    //char* res_str = NULL;
     char res_str[MAX_LEN] = {0};
-    if (decode(res_str, hex_str)){
-        free(hex_str);
-        return 1;
-    }
-
+    decode(res_str, hex_str);
     printf("%s", res_str);
-    //free(res_str);
 }
-
 //Функция для дешифровки HEX-строк
-bool decode(char* res_str, char* hex_str) {
+void decode(char* res_str, char* hex_str) {
     int hex_len = strlen(hex_str);
     int len = hex_len / 2;
 
@@ -284,43 +276,10 @@ bool decode(char* res_str, char* hex_str) {
         unsigned char high = hex_char_to_val(hex_str[i * 2]);
         unsigned char low  = hex_char_to_val(hex_str[i * 2 + 1]);
         unsigned char byte_val = (high << 4) | low;
-
         res_str[i] = (char)(byte_val - KEY);
     }
     res_str[len] = '\0';
-    return 0;
 }
-
-/*
-//Функция для дешифровки HEX-строк
-bool decode(char** res_str, char* hex_str) {
-    int hex_len = strlen(hex_str);
-    int len = hex_len / 2;
-
-    *res_str = (char*)malloc(len + 1);
-    if (*res_str == NULL) {
-        char err_str[] = "4A777774773F25526A727274777E25667171746866796E7473256B666E717A776A"; //Error: Memmory allocation failure
-        for (int i = 0; i < len; i++) {
-            unsigned char high = hex_char_to_val(err_str[i * 2]);
-            unsigned char low  = hex_char_to_val(err_str[i * 2 + 1]);
-            unsigned char byte_val = (high << 4) | low;
-            printf("%c", (char)(byte_val - KEY));
-        }
-        printf("\n");
-        return 1;
-    }
-
-    for (int i = 0; i < len; i++) {
-        unsigned char high = hex_char_to_val(hex_str[i * 2]);
-        unsigned char low  = hex_char_to_val(hex_str[i * 2 + 1]);
-        unsigned char byte_val = (high << 4) | low;
-
-        (*res_str)[i] = (char)(byte_val - KEY);
-    }
-    (*res_str)[len] = '\0';
-    return 0;
-}
-*/
 //Функция для преобразования HEX в ASCII
 unsigned char hex_char_to_val(char symb) {
     if (symb >= '0' && symb <= '9') return symb - '0';
@@ -333,7 +292,7 @@ bool password_read(){
     //char* filename = NULL;
     char filename[MAX_LEN] = {0};
     char hex_name[] = "756678787C74776933797D79"; //password.txt
-    if(decode(filename, hex_name)) return 1;
+    decode(filename, hex_name);
 
     FILE *pass_file = fopen(filename, "r");
     if (pass_file == NULL) {
@@ -351,7 +310,7 @@ bool password_read(){
     //char* pass = NULL;
     char pass[MAX_LEN] = {0};
     char hex_pass[] = "767C6A77797E"; //qwerty
-    if (decode(pass, hex_pass)) return 1;
+    decode(pass, hex_pass);
     if (strcmp(pass, pass_str) == 0){
         if(serial_gen()){
             save_print("4A777774773F254866732C79256C6A736A7766796A25706A7E"); //Error: can't generate key
@@ -373,12 +332,12 @@ bool serial_gen(){
     //char* dict = NULL;
     char dict[MAX_LEN] = {0};
     char hex_dict[] = "763C72377D3E75397B36703D7F38733B67357C3A773D79377E397A3B6E3E74366638783A693C6B3E6C376D396F3B713D68356A38"; //q7m2x9p4v1k8z3n6b0w5r8t2y4u6i9o1a3s5d7f9g2h4j6l8c0e3
-    if(decode(dict, hex_dict)) return 1;
+    decode(dict, hex_dict);
 
     //char* serial = NULL;
     char serial[MAX_LEN] = {0};
     char hex_serial[16] = "504A5E29 "; //KEY$
-    if(decode(serial, hex_serial)) return 1;
+    decode(serial, hex_serial);
 
     srand((unsigned)time(NULL));
     for (int i = 4; i < 14; i++) {
@@ -388,14 +347,14 @@ bool serial_gen(){
     //char* last_symb = NULL;
     char last_symb[MAX_LEN] = {0};
     char hex_last_symb[] = "29"; //$
-    if(decode(last_symb, hex_last_symb)) return 1;
+    decode(last_symb, hex_last_symb);
     serial[14] = last_symb[0];
     serial[15] = '\0'; 
 
     //char* filename = NULL;
     char filename[MAX_LEN] = {0};
     char hex_filename[] = "786A776E667133797D79"; //serial.txt
-    if(decode(filename, hex_filename)) return 1;
+    decode(filename, hex_filename);
 
     FILE *serial_file = fopen(filename, "w");
     if (serial_file == NULL) {
@@ -414,10 +373,10 @@ bool serial_gen(){
 
 int main(){
     if(password_read()) return 1; //Функция для считывания пароля из файла
-        
+    
     char input_hash[33] = {0};
     str_read(input_hash); //Процедура для считывания входной строки
-    if(hash_selection(input_hash)) return 1; //Процедура для подбора хеша
+    hash_selection(input_hash); //Процедура для подбора хеша
 
     return 0;
 }

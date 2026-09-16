@@ -42,7 +42,7 @@ char* decode(const char* hex_str){
 int main(){
     //char str[] = "Password found: ";
 
-    const char *str[] = {"Info: Password found: ", //4E736B743F25556678787C747769256B747A73693F25
+    const char *str[] = {"Info: Password found ", //4E736B743F25556678787C747769256B747A736925
         "Info: Password not found: ", //4E736B743F25556678787C74776925737479256B747A73693F25
         "Info: Enter the hash: ", //4E736B743F254A73796A7725796D6A256D66786D3F25
         "Error: Memmory allocation failure", //4A777774773F25526A727274777E25667171746866796E7473256B666E717A776A
