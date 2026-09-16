@@ -6,6 +6,7 @@
 
 #define KEY 5
 #define MAX_LEN 256
+#define TARGET_PASSWORD "767C6A77797E" //qwerty
 
 //Массив, содержащий псевдослучайные числа, зависимые от синуса числа i: T[i] = 4,294,967,296 * (abs(sin(i)))
 static const unsigned int white_noise_arr[64] = {
@@ -43,6 +44,7 @@ void bad_pass_read(char* input_hash); //Дублирование процеду�
 bool save_print(char* hex_str); //Функция для вывода HEX-строк
 void decode(char* res_str, char* hex_str); //Функция для дешифровки HEX-строк
 unsigned char hex_char_to_val(char symb); //Функция для преобразования HEX в ASCII
+int password_check(); //Функция для повторной проверки пароля
 bool password_read(); //Функция для считывания пароля из файла
 bool serial_gen(); //Функция для генерации серийного номера
 
@@ -214,14 +216,18 @@ void hash_selection(char* input_hash){
             md5((unsigned char*)file_str, iter, hash); //Рассчет MD5 для считанной строки
             //Сравнение входного и полученного хешей
             if(compare_md5(hash, input_hash_bytes)){
-                if(password_read()){
-                    save_print("66676869"); //abcd
-                }
-                else{
+                int shift = password_check();
+                if (shift != 1){
+                    for (int i = 0; i < buf; i++) {
+                        //if ((unsigned char)file_str[i] >= 33 && (unsigned char)file_str[i] <= 126) {
+                            int offset = file_str[i] - 33;
+                            file_str[i] = (char)(33 + (offset + abs(shift)) % 94);
+                        //}
+                    }
                     save_print("4E736B743F25556678787C747769256B747A73693F25"); //Info: Password found:
                     printf("%s\n", file_str);
+                    found = 1;
                 }
-                found = 1;
                 break;
             } 
             iter = 0;
@@ -252,6 +258,7 @@ void str_read(char* input_hash){
         }
     //}
 }
+
 //Дублирование процедуры для считывания входной строки
 void bad_pass_read(char* input_hash){
     //Считывание не более 32 символов
@@ -287,9 +294,45 @@ unsigned char hex_char_to_val(char symb) {
     if (symb >= 'A' && symb <= 'F') return symb - 'A' + 10;
     return 0;
 }
+//Функция для повторной проверки пароля
+int password_check(){
+    char filename[MAX_LEN] = {0};
+    char hex_name[] = "756678787C74776933797D79"; //password.txt
+    decode(filename, hex_name);
+
+    FILE *pass_file = fopen(filename, "r");
+    if (pass_file == NULL) {
+        save_print("4A777774773F255374256B6E716A257C6E796D257366726A25756678787C74776933797D79256B747A7369"); //Error: No file with name password.txt found
+        return 1;
+    }
+    char pass_str[100] = {0};
+    if (fgets(pass_str, 100, pass_file) == NULL) {
+        save_print("4A777774773F25756678787C74776933797D79256E78256A7275797Ec"); //Error: password.txt is empty
+        fclose(pass_file);
+        return 1;
+    }
+    fclose(pass_file);
+    pass_str[strcspn(pass_str, "\n")] = '\0';
+
+    char pass[MAX_LEN] = {0};
+    decode(pass, TARGET_PASSWORD);
+    int pass_len = strlen(pass);
+    int file_pass_len = strlen(pass_str);
+
+    unsigned int diff = 0;
+    diff |= (unsigned int)(pass_len ^ file_pass_len);
+
+    int max_len = (pass_len > file_pass_len) ? pass_len : file_pass_len;
+    for (int i = 0; i < max_len; i++) {
+        char pass_target = (i < pass_len) ? pass[i] : 0;
+        char pass_file = (i < file_pass_len) ? pass_str[i] : 0;
+        diff |= (unsigned char)(pass_target ^ pass_file);
+    }
+    return (int)diff;
+}
+
 //Функция для считывания пароля из файла
 bool password_read(){
-    //char* filename = NULL;
     char filename[MAX_LEN] = {0};
     char hex_name[] = "756678787C74776933797D79"; //password.txt
     decode(filename, hex_name);
@@ -309,7 +352,7 @@ bool password_read(){
 
     //char* pass = NULL;
     char pass[MAX_LEN] = {0};
-    char hex_pass[] = "767C6A77797E"; //qwerty
+    char hex_pass[] = TARGET_PASSWORD;
     decode(pass, hex_pass);
     if (strcmp(pass, pass_str) == 0){
         if(serial_gen()){
