@@ -179,11 +179,12 @@ void hash_selection(char* input_hash){
     char filename[MAX_LEN] = {0};
     char hex_name[] = "557C69676479747532363535353535353533797D79"; //Pwdb_top-10000000.txt
     decode(filename, hex_name);
-
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
        exit(1);
     }
+    memset(filename, 0, MAX_LEN);
+
     //Подготовка строки для считования
     int buf = 10;
     char *file_str = (char*)malloc(buf * sizeof(char));
@@ -273,13 +274,14 @@ bool save_print(char* hex_str){
     char res_str[MAX_LEN] = {0};
     decode(res_str, hex_str);
     printf("%s", res_str);
+    memset(res_str, 0, MAX_LEN);
 }
 //Функция для дешифровки HEX-строк
 void decode(char* res_str, char* hex_str) {
     int hex_len = strlen(hex_str);
     int len = hex_len / 2;
 
-    for (int i = 0; i < len, i < MAX_LEN; i++) {
+    for (int i = 0; i < len && i < MAX_LEN; i++) {
         unsigned char high = hex_char_to_val(hex_str[i * 2]);
         unsigned char low  = hex_char_to_val(hex_str[i * 2 + 1]);
         unsigned char byte_val = (high << 4) | low;
@@ -299,8 +301,9 @@ int password_check(){
     char filename[MAX_LEN] = {0};
     char hex_name[] = "756678787C74776933797D79"; //password.txt
     decode(filename, hex_name);
-
+    
     FILE *pass_file = fopen(filename, "r");
+    memset(filename, 0, MAX_LEN);
     if (pass_file == NULL) {
         save_print("4A777774773F255374256B6E716A257C6E796D257366726A25756678787C74776933797D79256B747A7369"); //Error: No file with name password.txt found
         return 1;
@@ -328,9 +331,10 @@ int password_check(){
         char pass_file = (i < file_pass_len) ? pass_str[i] : 0;
         diff |= (unsigned char)(pass_target ^ pass_file);
     }
+    memset(pass, 0, MAX_LEN);
+
     return (int)diff;
 }
-
 //Функция для считывания пароля из файла
 bool password_read(){
     char filename[MAX_LEN] = {0};
@@ -386,6 +390,7 @@ bool serial_gen(){
     for (int i = 4; i < 14; i++) {
         serial[i] = dict[rand() % 36];
     }
+    memset(dict, 0, MAX_LEN);
 
     //char* last_symb = NULL;
     char last_symb[MAX_LEN] = {0};
@@ -393,6 +398,7 @@ bool serial_gen(){
     decode(last_symb, hex_last_symb);
     serial[14] = last_symb[0];
     serial[15] = '\0'; 
+    memset(last_symb, 0, MAX_LEN);
 
     //char* filename = NULL;
     char filename[MAX_LEN] = {0};
@@ -400,6 +406,7 @@ bool serial_gen(){
     decode(filename, hex_filename);
 
     FILE *serial_file = fopen(filename, "w");
+    memset(filename, 0, MAX_LEN);
     if (serial_file == NULL) {
         save_print("4A777774773F254866732C792574756A73256B6E716A25786A776E667133797D79"); //Error: Can't open file serial.txt
         return 1;
@@ -410,7 +417,8 @@ bool serial_gen(){
         fclose(serial_file);
         return 1;
     }
-    fclose(serial_file);   
+    fclose(serial_file);
+    memset(serial, 0, MAX_LEN);   
     return 0;
 }
 
