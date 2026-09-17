@@ -57,13 +57,15 @@ int main(){
         "password.txt", //756678787C74776933797D79
         "serial.txt", //786A776E667133797D79
         "q7m2x9p4v1k8z3n6b0w5r8t2y4u6i9o1a3s5d7f9g2h4j6l8c0e3", //763C72377D3E75397B36703D7F38733B67357C3A773D79377E397A3B6E3E74366638783A693C6B3E6C376D396F3B713D68356A38
+        "Stop debugging me!", //5879747525696A677A6C6C6E736C25726A26
         "KEY$", //504A5E29 
         "qwerty", //767C6A77797E
+        "P@$sw0RD", //554529787C355749
         "abcd", //66676869
         "$" //29
     };
 
-    for (int i = 0; i < 19; i++){
+    for (int i = 0; i < 21; i++){
         char *hex = encode(str[i]);
         printf("%s\n", hex);
     }

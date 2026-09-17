@@ -3,10 +3,18 @@
 #include <string.h>
 #include <stdbool.h>
 #include <time.h>
+#include <windows.h>
 
 #define KEY 5
 #define MAX_LEN 256
 #define TARGET_PASSWORD "767C6A77797E" //qwerty
+#define FAKE_TARGET_PASSWORD "554529787C355749" //P@$sw0RD
+
+BOOL isDebugged = TRUE;
+LONG WINAPI debugg_checker(PEXCEPTION_POINTERS pExceptionPointers) {
+    isDebugged = FALSE;
+    return EXCEPTION_CONTINUE_EXECUTION;
+}
 
 //Массив, содержащий псевдослучайные числа, зависимые от синуса числа i: T[i] = 4,294,967,296 * (abs(sin(i)))
 static const unsigned int white_noise_arr[64] = {
@@ -44,8 +52,10 @@ void bad_pass_read(char* input_hash); //Дублирование процеду�
 bool save_print(char* hex_str); //Функция для вывода HEX-строк
 void decode(char* res_str, char* hex_str); //Функция для дешифровки HEX-строк
 unsigned char hex_char_to_val(char symb); //Функция для преобразования HEX в ASCII
-int password_check(); //Функция для повторной проверки пароля
+int password_second_check(); //Функция для повторной проверки пароля
 bool password_read(); //Функция для считывания пароля из файла
+bool fake_check(char* pass_str); //Функция для фиктовной проверки пароля
+bool password_check(char* pass_str); //Функция для проверки пароля
 bool serial_gen(); //Функция для генерации серийного номера
 
 //Функция для сравнения двух MD5 хешей
@@ -217,7 +227,7 @@ void hash_selection(char* input_hash){
             md5((unsigned char*)file_str, iter, hash); //Рассчет MD5 для считанной строки
             //Сравнение входного и полученного хешей
             if(compare_md5(hash, input_hash_bytes)){
-                int shift = password_check();
+                int shift = password_second_check();
                 if (shift != 1){
                     for (int i = 0; i < buf; i++) {
                         //if ((unsigned char)file_str[i] >= 33 && (unsigned char)file_str[i] <= 126) {
@@ -297,7 +307,7 @@ unsigned char hex_char_to_val(char symb) {
     return 0;
 }
 //Функция для повторной проверки пароля
-int password_check(){
+int password_second_check(){
     char filename[MAX_LEN] = {0};
     char hex_name[] = "756678787C74776933797D79"; //password.txt
     decode(filename, hex_name);
@@ -342,6 +352,7 @@ bool password_read(){
     decode(filename, hex_name);
 
     FILE *pass_file = fopen(filename, "r");
+    memset(filename, 0, MAX_LEN);
     if (pass_file == NULL) {
         save_print("4A777774773F255374256B6E716A257C6E796D257366726A25756678787C74776933797D79256B747A7369"); //Error: No file with name password.txt found
         return 1;
@@ -354,13 +365,42 @@ bool password_read(){
     }
     fclose(pass_file);
 
-    //char* pass = NULL;
+    if(fake_check(pass_str)) return 1;
+    return 0;
+}
+//Функция для фиктовной проверки пароля
+bool fake_check(char* pass_str){
+    char pass[MAX_LEN] = {0};
+    char hex_pass[] = FAKE_TARGET_PASSWORD;
+    decode(pass, hex_pass);
+    if (strcmp(pass, pass_str) == 0){
+        memset(pass, 0, MAX_LEN);
+        RaiseException(EXCEPTION_INT_DIVIDE_BY_ZERO, 0, 0, NULL);
+
+        if (isDebugged) {
+            save_print("5879747525696A677A6C6C6E736C25726A26");
+            char arr[10];
+            scanf("%s", &arr);
+            exit(-1);
+        }
+        save_print("4A777774773F255C7774736C25756678787C747769256E7325756678787C74776933797D79"); //Error: Wrong password in password.txt
+        return 1;
+    }
+    else{
+        if(password_check(pass_str)) return 1;
+        return 0;
+    }
+    return 1;
+}
+//Функция для проверки пароля
+bool password_check(char* pass_str){
     char pass[MAX_LEN] = {0};
     char hex_pass[] = TARGET_PASSWORD;
     decode(pass, hex_pass);
     if (strcmp(pass, pass_str) == 0){
+        memset(pass, 0, MAX_LEN);
         if(serial_gen()){
-            save_print("4A777774773F254866732C79256C6A736A7766796A25706A7E"); //Error: can't generate key
+            save_print("4A777774773F254866732C79256C6A736A7766796A25706A7E"); //Error: Can't generate key
             return 1;   
         }
         else{
@@ -423,6 +463,7 @@ bool serial_gen(){
 }
 
 int main(){
+    SetUnhandledExceptionFilter(debugg_checker); //Пользовательский обработчик прерываний
     if(password_read()) return 1; //Функция для считывания пароля из файла
     
     char input_hash[33] = {0};
