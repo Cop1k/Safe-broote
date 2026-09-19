@@ -1,32 +1,24 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
-#include <string.h>
-
-// =========================================================
-// ПОДКЛЮЧЕНИЕ ПЛАТФОРМОЗАВИСИМЫХ БИБЛИОТЕК
-// =========================================================
-
-#ifdef _WIN32
-    // Библиотеки для Windows
+#if defined(_WIN32) //Windows
+    //Сетевые библиотеки Windows
     #include <winsock2.h>
     #include <windows.h>
     #include <iphlpapi.h>
-    #pragma comment(lib, "iphlpapi.lib")
-    #pragma comment(lib, "ws2_32.lib")
 
-#elif defined(__linux__)
-    // Библиотеки для Linux
+    #if defined(_MSC_VER) //MSVC
+        #include <intrin.h>
+        #pragma comment(lib, "iphlpapi.lib") //Для получения MAC-адресса
+        #pragma comment(lib, "ws2_32.lib") //Для работы остальног 
+    #else
+        #include <cpuid.h> //Для получения данных о гипервизоре
+    #endif
+
+#elif defined(__linux__) //Linux
+    //Сетевые библиотеки Linux
     #include <sys/types.h>
     #include <ifaddrs.h>
-    #include <netpacket/packet.h> // Для структуры sockaddr_ll (AF_PACKET)
-#else
-    #error "Unsupported Operating System!"
+    #include <netpacket/packet.h>
+    #include <cpuid.h>
 #endif
-
-// =========================================================
-// ОБЩИЙ КОД (Платформонезависимый)
-// =========================================================
 
 // Проверяем OUI (первые 3 байта). Используем платформонезависимый тип uint8_t
 const char* check_mac_oui(const uint8_t* mac) {
@@ -48,7 +40,6 @@ const char* check_mac_oui(const uint8_t* mac) {
 
 void scan_mac_addresses(int *vm_detected) {
 #ifdef _WIN32
-    // --- РЕАЛИЗАЦИЯ ДЛЯ WINDOWS ---
     ULONG outBufLen = sizeof(IP_ADAPTER_INFO);
     PIP_ADAPTER_INFO pAdapterInfo = (IP_ADAPTER_INFO*)malloc(outBufLen);
     
@@ -127,23 +118,31 @@ void scan_mac_addresses(int *vm_detected) {
 #endif
 }
 
-// =========================================================
-// ТОЧКА ВХОДА (ОДИНАКОВАЯ ДЛЯ ВСЕХ ОС)
-// =========================================================
+bool cpu_check(); //Функция для проверка наличия бита гипервизора
+int check_hypervisor_bit(); //Функция для проверка наличия бита гипервизора
+bool vm_decision(); //Функция для принятия решения
 
-int main() {
-    int vm_detected = 0;
+//Функция для проверка наличия бита гипервизора
+bool cpu_check() {
+    if (check_hypervisor_bit()) return 1; //Обнаружен гипервизор
+    return 0; //Не обнражуен гипервизор
+}
+//Вспомогательная функция для проверка наличия бита гипервизора
+int check_hypervisor_bit() {
+    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
 
-    printf("Scanning network adapters for VM MAC addresses...\n\n");
-    
-    // Вызываем функцию. Внутри она сама решит, какой код исполнять
-    scan_mac_addresses(&vm_detected);
+    #ifdef _MSC_VER
+        int cpu_info_arr[4]; //Массив для регистров EAX, EBX, ECX, EDX
+        __cpuid(cpu_info_arr, 1); //Вызов CPUID с параметром EAX = 1 (запрос ифнормации о ЦП)
+        ecx = (unsigned int)cpu_info_arr[2]; //Регистр ECX содержит в себе бит гипервизора
+    #else
+        __cpuid(1, eax, ebx, ecx, edx); //Аналогично, но для GCC
+    #endif
 
-    if (vm_detected) {
-        printf("\nRESULT: Virtual Machine environment DETECTED based on MAC address.\n");
-    } else {
-        printf("\nRESULT: No known VM MAC addresses found.\n");
-    }
-
+    return (ecx >> 31) & 1; //Сдвиг битов регистра так, чтобы получить 32 бит (бит гипервизора)
+}
+//Функция для принятия решения
+bool vm_decision(){
+    if (cpu_check()) return 1;
     return 0;
 }
