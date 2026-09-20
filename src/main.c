@@ -486,9 +486,10 @@ unsigned int calculate_crc32(const unsigned char *data, unsigned int length) {
 int main(){
     SetUnhandledExceptionFilter(debugg_checker); //Пользовательский обработчик прерываний
 
+    //Функция для обнаружения виртуальной машины
     if(vm_decision()){
         printf("VW detected");
-        return 1; //Функция для обнаружения виртуальной машины
+        return 1; 
     }
 
     if(password_read()) return 1; //Функция для считывания пароля из файла
