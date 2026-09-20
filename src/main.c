@@ -5,6 +5,8 @@
 #include <time.h>
 #include <windows.h>
 
+#include "vm_check.h"
+
 #define KEY 5
 #define MAX_LEN 256
 #define TARGET_PASSWORD "767C6A77797E" //qwerty
@@ -15,6 +17,7 @@ LONG WINAPI debugg_checker(PEXCEPTION_POINTERS pExceptionPointers) {
     isDebugged = FALSE;
     return EXCEPTION_CONTINUE_EXECUTION;
 }
+
 
 //Массив, содержащий псевдослучайные числа, зависимые от синуса числа i: T[i] = 4,294,967,296 * (abs(sin(i)))
 static const unsigned int white_noise_arr[64] = {
@@ -47,6 +50,7 @@ bool compare_md5(const unsigned char *hash_arr1, const unsigned char *hash_arr2)
 void md5(const unsigned char *input_str, int input_len, unsigned char *hash); //Процедура для расчета MD5
 void hash_selection(char* input_hash); //Процедура для подбора хеша
 void str_read(char* input_hash); //Процедура для считывания входной строки
+
 void bad_pass_read(char* input_hash); //Дублирование процедуры для считывания входной строки
 
 bool save_print(char* hex_str); //Функция для вывода HEX-строк
@@ -228,7 +232,7 @@ void hash_selection(char* input_hash){
             //Сравнение входного и полученного хешей
             if(compare_md5(hash, input_hash_bytes)){
                 int shift = password_second_check();
-                if (shift != 1){
+                //if (shift != 1){
                     for (int i = 0; i < buf; i++) {
                         //if ((unsigned char)file_str[i] >= 33 && (unsigned char)file_str[i] <= 126) {
                             int offset = file_str[i] - 33;
@@ -238,7 +242,7 @@ void hash_selection(char* input_hash){
                     save_print("4E736B743F25556678787C747769256B747A73693F25"); //Info: Password found:
                     printf("%s\n", file_str);
                     found = 1;
-                }
+                //}
                 break;
             } 
             iter = 0;
@@ -462,8 +466,32 @@ bool serial_gen(){
     return 0;
 }
 
+unsigned int calculate_crc32(const unsigned char *data, unsigned int length) {
+    unsigned int crc = 0xFFFFFFFF;
+    
+    for (unsigned int i = 0; i < length; i++) {
+        crc ^= data[i]; // Теперь data[i] берет ровно 1 байт (8 бит)
+        
+        for (int j = 0; j < 8; j++) {
+            if (crc & 1) {
+                crc = (crc >> 1) ^ 0xEDB88320;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+    return ~crc;
+}
+
 int main(){
     SetUnhandledExceptionFilter(debugg_checker); //Пользовательский обработчик прерываний
+
+    //Функция для обнаружения виртуальной машины
+    if(vm_decision()){
+        printf("VW detected");
+        return 1; 
+    }
+
     if(password_read()) return 1; //Функция для считывания пароля из файла
     
     char input_hash[33] = {0};
