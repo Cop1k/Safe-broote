@@ -5,7 +5,7 @@
 #include <time.h>
 #include <windows.h>
 
-#include "wm_check.h"
+#include "vm_check.h"
 
 #define KEY 5
 #define MAX_LEN 256

@@ -1,25 +1,14 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <stdint.h>
 #include <string.h>
+#include <ctype.h>
 
 // =========================================================
 // ПОДКЛЮЧЕНИЕ ПЛАТФОРМОЗАВИСИМЫХ БИБЛИОТЕК
 // =========================================================
-
 #ifdef _WIN32
-    // Библиотеки для Windows
-    #include <winsock2.h>
     #include <windows.h>
-    #include <iphlpapi.h>
-    #pragma comment(lib, "iphlpapi.lib")
-    #pragma comment(lib, "ws2_32.lib")
-
 #elif defined(__linux__)
-    // Библиотеки для Linux
-    #include <sys/types.h>
-    #include <ifaddrs.h>
-    #include <netpacket/packet.h> // Для структуры sockaddr_ll (AF_PACKET)
+    #include <stdlib.h> // В Linux для чтения файлов достаточно стандартной библиотеки
 #else
     #error "Unsupported Operating System!"
 #endif
@@ -28,121 +17,133 @@
 // ОБЩИЙ КОД (Платформонезависимый)
 // =========================================================
 
-// Проверяем OUI (первые 3 байта). Используем платформонезависимый тип uint8_t
-const char* check_mac_oui(const uint8_t* mac) {
-    if (mac[0] == 0x00 && mac[1] == 0x05 && mac[2] == 0x69) return "VMware";
-    if (mac[0] == 0x00 && mac[1] == 0x0C && mac[2] == 0x29) return "VMware";
-    if (mac[0] == 0x00 && mac[1] == 0x1C && mac[2] == 0x14) return "VMware";
-    if (mac[0] == 0x00 && mac[1] == 0x50 && mac[2] == 0x56) return "VMware";
-    if (mac[0] == 0x08 && mac[1] == 0x00 && mac[2] == 0x27) return "VirtualBox";
-    if (mac[0] == 0x52 && mac[1] == 0x54 && mac[2] == 0x00) return "QEMU / KVM";
-    if (mac[0] == 0x00 && mac[1] == 0x15 && mac[2] == 0x5D) return "Microsoft Hyper-V";
-    if (mac[0] == 0x00 && mac[1] == 0x1C && mac[2] == 0x42) return "Parallels";
+// Перевод строки в нижний регистр
+void to_lowercase(char* str) {
+    for (int i = 0; str[i]; i++) {
+        str[i] = tolower((unsigned char)str[i]);
+    }
+}
 
-    return NULL;
+// Проверка строки на наличие известных маркеров виртуальных машин
+int check_for_vm_markers(const char* data, const char* field_name) {
+    if (data == NULL || strlen(data) == 0) return 0;
+
+    char lower_data[256];
+    // Безопасное копирование строки
+    snprintf(lower_data, sizeof(lower_data), "%s", data);
+    to_lowercase(lower_data);
+
+    const char* vm_markers[] = {
+        "vmware",
+        "virtualbox",
+        "innotek",
+        "qemu",
+        "bochs",
+        "parallels",
+        "microsoft corporation", // В сочетании с Virtual Machine
+        "virtual machine"
+    };
+
+    int num_markers = sizeof(vm_markers) / sizeof(vm_markers[0]);
+
+    for (int i = 0; i < num_markers; i++) {
+        if (strstr(lower_data, vm_markers[i]) != NULL) {
+            printf("[!] VM DETECTED in %s: '%s' contains marker '%s'\n", field_name, data, vm_markers[i]);
+            return 1;
+        }
+    }
+    
+    printf("[+] %s looks clean: '%s'\n", field_name, data);
+    return 0;
 }
 
 // =========================================================
-// ПЛАТФОРМОЗАВИСИМЫЕ ФУНКЦИИ СКАНИРОВАНИЯ СЕТИ
+// ПЛАТФОРМОЗАВИСИМЫЕ ФУНКЦИИ ЧТЕНИЯ ДАННЫХ
 // =========================================================
 
-void scan_mac_addresses(int *vm_detected) {
 #ifdef _WIN32
-    // --- РЕАЛИЗАЦИЯ ДЛЯ WINDOWS ---
-    ULONG outBufLen = sizeof(IP_ADAPTER_INFO);
-    PIP_ADAPTER_INFO pAdapterInfo = (IP_ADAPTER_INFO*)malloc(outBufLen);
-    
-    if (pAdapterInfo == NULL) return;
-
-    if (GetAdaptersInfo(pAdapterInfo, &outBufLen) == ERROR_BUFFER_OVERFLOW) {
-        free(pAdapterInfo);
-        pAdapterInfo = (IP_ADAPTER_INFO*)malloc(outBufLen);
-        if (pAdapterInfo == NULL) return;
-    }
-
-    if (GetAdaptersInfo(pAdapterInfo, &outBufLen) == NO_ERROR) {
-        PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
-        while (pAdapter) {
-            if (pAdapter->AddressLength == 6) {
-                uint8_t* mac = (uint8_t*)pAdapter->Address;
-                printf("Adapter: %s\n", pAdapter->Description);
-                printf("MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\n", 
-                        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-
-                const char* vm_name = check_mac_oui(mac);
-                if (vm_name != NULL) {
-                    printf("[!] DETECTED VM OUI: %s\n", vm_name);
-                    *vm_detected = 1;
-                } else {
-                    printf("[+] Looks like a physical device.\n");
-                }
-                printf("----------------------------------------\n");
-            }
-            pAdapter = pAdapter->Next;
+// --- РЕАЛИЗАЦИЯ ДЛЯ WINDOWS (Через реестр) ---
+int read_os_string(const char* key_path, const char* value_name, char* outBuffer, size_t bufferSize) {
+    HKEY hKey;
+    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, key_path, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
+        DWORD type;
+        DWORD size = (DWORD)bufferSize;
+        if (RegQueryValueExA(hKey, value_name, NULL, &type, (LPBYTE)outBuffer, &size) == ERROR_SUCCESS) {
+            RegCloseKey(hKey);
+            return 1;
         }
+        RegCloseKey(hKey);
     }
-    free(pAdapterInfo);
+    return 0;
+}
+
+void scan_motherboard(int *vm_score) {
+    const char* bios_key = "HARDWARE\\DESCRIPTION\\System\\BIOS";
+    char buffer[256];
+
+    if (read_os_string(bios_key, "SystemManufacturer", buffer, sizeof(buffer)))
+        *vm_score += check_for_vm_markers(buffer, "SystemManufacturer");
+
+    if (read_os_string(bios_key, "SystemProductName", buffer, sizeof(buffer)))
+        *vm_score += check_for_vm_markers(buffer, "SystemProductName");
+
+    if (read_os_string(bios_key, "BaseBoardManufacturer", buffer, sizeof(buffer)))
+        *vm_score += check_for_vm_markers(buffer, "BaseBoardManufacturer");
+}
 
 #elif defined(__linux__)
-    // --- РЕАЛИЗАЦИЯ ДЛЯ LINUX ---
-    struct ifaddrs *ifaddr = NULL;
-    struct ifaddrs *ifa = NULL;
-
-    // Получаем связный список всех сетевых интерфейсов
-    if (getifaddrs(&ifaddr) == -1) {
-        perror("getifaddrs");
-        return;
-    }
-
-    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next) {
-        if (ifa->ifa_addr == NULL) continue;
-
-        // Ищем интерфейсы, относящиеся к физическому уровню (AF_PACKET)
-        if (ifa->ifa_addr->sa_family == AF_PACKET) {
-            struct sockaddr_ll *s = (struct sockaddr_ll*)ifa->ifa_addr;
-            
-            // Проверяем, что длина адреса 6 байт (Ethernet MAC)
-            if (s->sll_halen == 6) {
-                uint8_t *mac = (uint8_t *)s->sll_addr;
-                
-                // Игнорируем loopback-интерфейс (обычно MAC 00:00:00:00:00:00)
-                if (mac[0] == 0 && mac[1] == 0 && mac[2] == 0) continue;
-
-                printf("Adapter: %s\n", ifa->ifa_name);
-                printf("MAC Address: %02X:%02X:%02X:%02X:%02X:%02X\n", 
-                        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
-
-                const char* vm_name = check_mac_oui(mac);
-                if (vm_name != NULL) {
-                    printf("[!] DETECTED VM OUI: %s\n", vm_name);
-                    *vm_detected = 1;
-                } else {
-                    printf("[+] Looks like a physical device.\n");
-                }
-                printf("----------------------------------------\n");
-            }
+// --- РЕАЛИЗАЦИЯ ДЛЯ LINUX (Через файловую систему sysfs) ---
+int read_os_string(const char* filepath, char* outBuffer, size_t bufferSize) {
+    FILE* file = fopen(filepath, "r");
+    if (file != NULL) {
+        if (fgets(outBuffer, bufferSize, file) != NULL) {
+            // Удаляем символ переноса строки (\n) в конце, если он есть
+            outBuffer[strcspn(outBuffer, "\r\n")] = 0;
+            fclose(file);
+            return 1;
         }
+        fclose(file);
     }
-    freeifaddrs(ifaddr);
-#endif
+    return 0; // Не удалось открыть файл или прочитать
 }
 
+void scan_motherboard(int *vm_score) {
+    char buffer[256];
+
+    // Производитель системы (Sys Vendor)
+    if (read_os_string("/sys/class/dmi/id/sys_vendor", buffer, sizeof(buffer)))
+        *vm_score += check_for_vm_markers(buffer, "sys_vendor");
+
+    // Имя продукта (Product Name)
+    if (read_os_string("/sys/class/dmi/id/product_name", buffer, sizeof(buffer)))
+        *vm_score += check_for_vm_markers(buffer, "product_name");
+
+    // Производитель материнской платы (Board Vendor)
+    if (read_os_string("/sys/class/dmi/id/board_vendor", buffer, sizeof(buffer)))
+        *vm_score += check_for_vm_markers(buffer, "board_vendor");
+        
+    // Название материнской платы (Board Name)
+    if (read_os_string("/sys/class/dmi/id/board_name", buffer, sizeof(buffer)))
+        *vm_score += check_for_vm_markers(buffer, "board_name");
+}
+#endif
+
 // =========================================================
-// ТОЧКА ВХОДА (ОДИНАКОВАЯ ДЛЯ ВСЕХ ОС)
+// ТОЧКА ВХОДА
 // =========================================================
 
 int main() {
-    int vm_detected = 0;
+    int vm_score = 0;
 
-    printf("Scanning network adapters for VM MAC addresses...\n\n");
+    printf("Scanning Motherboard/SMBIOS info for VM signatures...\n\n");
     
-    // Вызываем функцию. Внутри она сама решит, какой код исполнять
-    scan_mac_addresses(&vm_detected);
+    // Функция сама выберет нужную ОС
+    scan_motherboard(&vm_score);
 
-    if (vm_detected) {
-        printf("\nRESULT: Virtual Machine environment DETECTED based on MAC address.\n");
+    if (vm_score > 0) {
+        printf("\nRESULT: Virtual Machine DETECTED! (Score: %d)\n", vm_score);
     } else {
-        printf("\nRESULT: No known VM MAC addresses found.\n");
+        printf("\nRESULT: No VM markers found in Motherboard info.\n");
     }
 
     return 0;
