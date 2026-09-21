@@ -6,10 +6,12 @@
 #include <windows.h>
 
 #include "vm_check.h"
+#include "decrypt.h"
 
 #define KEY 5
 #define MAX_LEN 256
-#define TARGET_PASSWORD "767C6A77797E" //qwerty
+#define TARGET_PASSWORD "\x2B\x1A\x37\x4B\x23\x1D" //qwerty
+#define TARGET_PASSWORD_SIZE 6
 #define FAKE_TARGET_PASSWORD "554529787C355749" //P@$sw0RD
 
 BOOL isDebugged = TRUE;
@@ -54,7 +56,7 @@ void str_read(char* input_hash); //Процедура для считывани�
 void bad_pass_read(char* input_hash); //Дублирование процедуры для считывания входной строки
 
 bool save_print(char* hex_str); //Функция для вывода HEX-строк
-void decode(char* res_str, char* hex_str); //Функция для дешифровки HEX-строк
+void decode_cesar(char* res_str, char* hex_str); //Функция для дешифровки HEX-строк
 unsigned char hex_char_to_val(char symb); //Функция для преобразования HEX в ASCII
 int password_second_check(); //Функция для повторной проверки пароля
 bool password_read(); //Функция для считывания пароля из файла
@@ -189,10 +191,9 @@ void hash_selection(char* input_hash){
     }
     
     //Открытие файла
-    //char* filename = NULL;
     char filename[MAX_LEN] = {0};
     char hex_name[] = "557C69676479747532363535353535353533797D79"; //Pwdb_top-10000000.txt
-    decode(filename, hex_name);
+    decode_cesar(filename, hex_name);
     FILE *file = fopen(filename, "r");
     if (file == NULL) {
        exit(1);
@@ -232,17 +233,13 @@ void hash_selection(char* input_hash){
             //Сравнение входного и полученного хешей
             if(compare_md5(hash, input_hash_bytes)){
                 int shift = password_second_check();
-                //if (shift != 1){
-                    for (int i = 0; i < buf; i++) {
-                        //if ((unsigned char)file_str[i] >= 33 && (unsigned char)file_str[i] <= 126) {
-                            int offset = file_str[i] - 33;
-                            file_str[i] = (char)(33 + (offset + abs(shift)) % 94);
-                        //}
-                    }
-                    save_print("4E736B743F25556678787C747769256B747A73693F25"); //Info: Password found:
-                    printf("%s\n", file_str);
-                    found = 1;
-                //}
+                for (int i = 0; i < buf; i++) {
+                    int offset = file_str[i] - 33;
+                    file_str[i] = (char)(33 + (offset + abs(shift)) % 94);
+                }
+                save_print("4E736B743F25556678787C747769256B747A73693F25"); //Info: Password found:
+                printf("%s\n", file_str);
+                found = 1;
                 break;
             } 
             iter = 0;
@@ -286,35 +283,16 @@ void bad_pass_read(char* input_hash){
 //Функция для вывода HEX-строк
 bool save_print(char* hex_str){
     char res_str[MAX_LEN] = {0};
-    decode(res_str, hex_str);
+    decode_cesar(res_str, hex_str);
     printf("%s", res_str);
     memset(res_str, 0, MAX_LEN);
 }
-//Функция для дешифровки HEX-строк
-void decode(char* res_str, char* hex_str) {
-    int hex_len = strlen(hex_str);
-    int len = hex_len / 2;
 
-    for (int i = 0; i < len && i < MAX_LEN; i++) {
-        unsigned char high = hex_char_to_val(hex_str[i * 2]);
-        unsigned char low  = hex_char_to_val(hex_str[i * 2 + 1]);
-        unsigned char byte_val = (high << 4) | low;
-        res_str[i] = (char)(byte_val - KEY);
-    }
-    res_str[len] = '\0';
-}
-//Функция для преобразования HEX в ASCII
-unsigned char hex_char_to_val(char symb) {
-    if (symb >= '0' && symb <= '9') return symb - '0';
-    if (symb >= 'a' && symb <= 'f') return symb - 'a' + 10;
-    if (symb >= 'A' && symb <= 'F') return symb - 'A' + 10;
-    return 0;
-}
 //Функция для повторной проверки пароля
 int password_second_check(){
     char filename[MAX_LEN] = {0};
     char hex_name[] = "756678787C74776933797D79"; //password.txt
-    decode(filename, hex_name);
+    decode_cesar(filename, hex_name);
     
     FILE *pass_file = fopen(filename, "r");
     memset(filename, 0, MAX_LEN);
@@ -332,7 +310,8 @@ int password_second_check(){
     pass_str[strcspn(pass_str, "\n")] = '\0';
 
     char pass[MAX_LEN] = {0};
-    decode(pass, TARGET_PASSWORD);
+    unsigned char xor_pass[TARGET_PASSWORD_SIZE + 1] = TARGET_PASSWORD;
+    decode_xor(pass, xor_pass, TARGET_PASSWORD_SIZE);
     int pass_len = strlen(pass);
     int file_pass_len = strlen(pass_str);
 
@@ -353,7 +332,7 @@ int password_second_check(){
 bool password_read(){
     char filename[MAX_LEN] = {0};
     char hex_name[] = "756678787C74776933797D79"; //password.txt
-    decode(filename, hex_name);
+    decode_cesar(filename, hex_name);
 
     FILE *pass_file = fopen(filename, "r");
     memset(filename, 0, MAX_LEN);
@@ -376,7 +355,7 @@ bool password_read(){
 bool fake_check(char* pass_str){
     char pass[MAX_LEN] = {0};
     char hex_pass[] = FAKE_TARGET_PASSWORD;
-    decode(pass, hex_pass);
+    decode_cesar(pass, hex_pass);
     if (strcmp(pass, pass_str) == 0){
         memset(pass, 0, MAX_LEN);
         RaiseException(EXCEPTION_INT_DIVIDE_BY_ZERO, 0, 0, NULL);
@@ -399,8 +378,8 @@ bool fake_check(char* pass_str){
 //Функция для проверки пароля
 bool password_check(char* pass_str){
     char pass[MAX_LEN] = {0};
-    char hex_pass[] = TARGET_PASSWORD;
-    decode(pass, hex_pass);
+    unsigned char xor_pass[TARGET_PASSWORD_SIZE + 1] = TARGET_PASSWORD;
+    decode_xor(pass, xor_pass, TARGET_PASSWORD_SIZE);
     if (strcmp(pass, pass_str) == 0){
         memset(pass, 0, MAX_LEN);
         if(serial_gen()){
@@ -423,12 +402,12 @@ bool serial_gen(){
     //char* dict = NULL;
     char dict[MAX_LEN] = {0};
     char hex_dict[] = "763C72377D3E75397B36703D7F38733B67357C3A773D79377E397A3B6E3E74366638783A693C6B3E6C376D396F3B713D68356A38"; //q7m2x9p4v1k8z3n6b0w5r8t2y4u6i9o1a3s5d7f9g2h4j6l8c0e3
-    decode(dict, hex_dict);
+    decode_cesar(dict, hex_dict);
 
     //char* serial = NULL;
     char serial[MAX_LEN] = {0};
     char hex_serial[16] = "504A5E29 "; //KEY$
-    decode(serial, hex_serial);
+    decode_cesar(serial, hex_serial);
 
     srand((unsigned)time(NULL));
     for (int i = 4; i < 14; i++) {
@@ -439,7 +418,7 @@ bool serial_gen(){
     //char* last_symb = NULL;
     char last_symb[MAX_LEN] = {0};
     char hex_last_symb[] = "29"; //$
-    decode(last_symb, hex_last_symb);
+    decode_cesar(last_symb, hex_last_symb);
     serial[14] = last_symb[0];
     serial[15] = '\0'; 
     memset(last_symb, 0, MAX_LEN);
@@ -447,7 +426,7 @@ bool serial_gen(){
     //char* filename = NULL;
     char filename[MAX_LEN] = {0};
     char hex_filename[] = "786A776E667133797D79"; //serial.txt
-    decode(filename, hex_filename);
+    decode_cesar(filename, hex_filename);
 
     FILE *serial_file = fopen(filename, "w");
     memset(filename, 0, MAX_LEN);

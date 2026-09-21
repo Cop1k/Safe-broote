@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdio.h>
+
 #include "decrypt.h"
 
 #if defined(_WIN32) //Windows
@@ -24,12 +25,11 @@
 
 static bool motherboard_check(); //Функция для проверки имени оборудования
 static bool read_os_string(char* hex_value_name, char* buff, size_t buff_size); //Функция для чтения данных об оборудовании
-static int check_for_vm_markers(char* data, char* field_name); //Функция для проверки строки на наличие маркеров виртуальных машин
+static bool check_for_vm_markers(char* data, char* field_name); //Функция для проверки строки на наличие маркеров виртуальных машин
 static void to_lower(char* str); //Процедура для перевода строки в нижний регистр
 static bool mac_check(); //Функция для проверки MAC-адресов сетевых интерфейсов
 static bool scan_mac(uint8_t* mac); //Функция для проверки первых 3 байт MAC-адреса
-static bool cpu_check(); //Функция для проверка наличия бита гипервизора
-static int check_hypervisor_bit(); //Вспомогательная функция для проверка наличия бита гипервизора
+static bool cpu_check(); //Функция для проверка наличия вендора гипервизора
 bool vm_decision(); //Функция для принятия решения
 
 //Функция для проверки имени оборудования
@@ -67,7 +67,6 @@ static bool read_os_string(char* hex_value_name, char* buff, size_t buff_size){
 
     #ifdef _WIN32
         HKEY key; //Ключ реестра
-        char key_path[MAX_LEN] = {0};
         decode_cesar(key_path, "4D4657495C46574A61494A5848574E55594E545361587E78796A7261474E5458"); //HARDWARE\\DESCRIPTION\\System\\BIOS
         if(RegOpenKeyExA(HKEY_LOCAL_MACHINE, key_path, 0, KEY_READ, &key) == ERROR_SUCCESS){ //Открытие ключа реестра
             DWORD type;
@@ -110,7 +109,7 @@ static bool read_os_string(char* hex_value_name, char* buff, size_t buff_size){
     return 0;
 }
 //Функция для проверки строки на наличие маркеров виртуальных машин
-static int check_for_vm_markers(char* data, char* field_name){
+static bool check_for_vm_markers(char* data, char* field_name){
     char lower_data[256];
     snprintf(lower_data, 256, "%s", data);
     to_lower(lower_data);
@@ -128,10 +127,10 @@ static int check_for_vm_markers(char* data, char* field_name){
         "74776668716A" //oracle
     };
 
-    for (int i = 0; i < 9; i++){
+    for(int i = 0; i < 9; i++){
         char ascii_vm[MAX_LEN] = {0};
         decode_cesar(ascii_vm, vm_markers[i]);
-        if (strstr(lower_data, ascii_vm) != NULL){
+        if(strstr(lower_data, ascii_vm) != NULL){
             memset(ascii_vm, 0, MAX_LEN);
             return 1;
         }
@@ -217,22 +216,43 @@ static bool scan_mac(uint8_t* mac){
 
     return 0;
 }
-//Функция для проверки наличия бита гипервизора
-static bool cpu_check(){
-    if (check_hypervisor_bit()) return 1; //Обнаружен гипервизор
-    return 0; //Не обнражуен гипервизор
+//Функция для проверки вендора гипервизора
+static bool cpu_check() {
+    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0; //Регистры ЦП
+
+    //Проверка бита гипервизора
+    //get_cpuid(1, &eax, &ebx, &ecx, &edx);
+    __cpuid(1, eax, ebx, ecx, edx);
+    if (!((ecx >> 31) & 1)) {
+        return 0;
+    }
+
+    //Получение вендора гипервизора
+    char hyper_vendor[13];
+    //get_cpuid(0x40000000, &eax, &ebx, &ecx, &edx);
+    __cpuid(0x40000000, eax, ebx, ecx, edx);
+    memcpy(hyper_vendor + 0, &ebx, 4);
+    memcpy(hyper_vendor + 4, &ecx, 4);
+    memcpy(hyper_vendor + 8, &edx, 4);
+    hyper_vendor[12] = '\0';
+
+    //Сравнение вендора гипервизора с Microsoft Hv (ОС Windows 11 работает под управлением гипервизора)
+    if (strcmp(hyper_vendor, "Microsoft Hv") == 0) {
+        //get_cpuid(0x40000003, &eax, &ebx, &ecx, &edx); //Запрос привилегии раздела гипервизора
+        __cpuid(0x40000003, eax, ebx, ecx, edx);
+
+        //Согласно спецификации Hyper-V TLFS, 12-й бит в регистре EBX означает наличие привилегий управления процессором (CpuManagement flag).
+        //Эти привилегии есть ТОЛЬКО у корневого раздела (Root Partition), т.е. у хоста.
+        if ((ebx >> 12) & 1) return 0;
+    }
+    return 1;
 }
-//Вспомогательная функция для проверка наличия бита гипервизора
-static int check_hypervisor_bit(){
-    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
-    __cpuid(1, eax, ebx, ecx, edx); //Аналогично, но для GCC
-    return (ecx >> 31) & 1; //Сдвиг битов регистра так, чтобы получить 32 бит (бит гипервизора)
-}
+
 //Функция для принятия решения
 bool vm_decision(){
     if (cpu_check()) return 1; //Проверка бита гипервизора
     if (mac_check()) return 1; //Проверка сетвой карты
     if (motherboard_check()) return 1; //Проверка названия материнской платы
-
+    
     return 0;
 }

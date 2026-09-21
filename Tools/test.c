@@ -1,150 +1,62 @@
 #include <stdio.h>
 #include <string.h>
-#include <ctype.h>
 
-// =========================================================
-// ПОДКЛЮЧЕНИЕ ПЛАТФОРМОЗАВИСИМЫХ БИБЛИОТЕК
-// =========================================================
-#ifdef _WIN32
-    #include <windows.h>
-#elif defined(__linux__)
-    #include <stdlib.h> // В Linux для чтения файлов достаточно стандартной библиотеки
+// Макрос для кроссплатформенного вызова CPUID
+#ifdef _MSC_VER
+    #include <intrin.h> // Для MSVC (Windows)
+    void get_cpuid(unsigned int leaf, unsigned int* eax, unsigned int* ebx, unsigned int* ecx, unsigned int* edx) {
+        int info[4];
+        __cpuid(info, leaf);
+        *eax = info[0]; *ebx = info[1]; *ecx = info[2]; *edx = info[3];
+    }
 #else
-    #error "Unsupported Operating System!"
+    #include <cpuid.h> // Для GCC/Clang
+    void get_cpuid(unsigned int leaf, unsigned int* eax, unsigned int* ebx, unsigned int* ecx, unsigned int* edx) {
+        __cpuid(leaf, *eax, *ebx, *ecx, *edx);
+    }
 #endif
 
-// =========================================================
-// ОБЩИЙ КОД (Платформонезависимый)
-// =========================================================
+void check_hypervisor_details() {
+    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
 
-// Перевод строки в нижний регистр
-void to_lowercase(char* str) {
-    for (int i = 0; str[i]; i++) {
-        str[i] = tolower((unsigned char)str[i]);
+    // 1. Сначала проверяем 31-й бит, чтобы узнать, активен ли гипервизор вообще
+    get_cpuid(1, &eax, &ebx, &ecx, &edx);
+    if (!((ecx >> 31) & 1)) {
+        printf("Hypervisor NOT detected. You are on a pure Host machine.\n");
+        return;
     }
-}
+    printf("Hypervisor present bit is set (1).\n");
 
-// Проверка строки на наличие известных маркеров виртуальных машин
-int check_for_vm_markers(const char* data, const char* field_name) {
-    if (data == NULL || strlen(data) == 0) return 0;
+    // 2. Получаем вендора гипервизора (EAX = 0x40000000)
+    get_cpuid(0x40000000, &eax, &ebx, &ecx, &edx);
 
-    char lower_data[256];
-    // Безопасное копирование строки
-    snprintf(lower_data, sizeof(lower_data), "%s", data);
-    to_lowercase(lower_data);
+    char vendor[13]; // 12 байт + нуль-терминатор
+    // ВАЖНО: Порядок регистров для гипервизора — EBX, ECX, EDX
+    // (в отличие от процессоров, где порядок EBX, EDX, ECX)
+    memcpy(vendor + 0, &ebx, 4);
+    memcpy(vendor + 4, &ecx, 4);
+    memcpy(vendor + 8, &edx, 4);
+    vendor[12] = '\0'; // Завершаем строку
 
-    const char* vm_markers[] = {
-        "vmware",
-        "virtualbox",
-        "innotek",
-        "qemu",
-        "bochs",
-        "parallels",
-        "microsoft corporation", // В сочетании с Virtual Machine
-        "virtual machine"
-    };
+    printf("Hypervisor Vendor: '%s'\n", vendor);
 
-    int num_markers = sizeof(vm_markers) / sizeof(vm_markers[0]);
-
-    for (int i = 0; i < num_markers; i++) {
-        if (strstr(lower_data, vm_markers[i]) != NULL) {
-            printf("[!] VM DETECTED in %s: '%s' contains marker '%s'\n", field_name, data, vm_markers[i]);
-            return 1;
-        }
-    }
-    
-    printf("[+] %s looks clean: '%s'\n", field_name, data);
-    return 0;
-}
-
-// =========================================================
-// ПЛАТФОРМОЗАВИСИМЫЕ ФУНКЦИИ ЧТЕНИЯ ДАННЫХ
-// =========================================================
-
-#ifdef _WIN32
-// --- РЕАЛИЗАЦИЯ ДЛЯ WINDOWS (Через реестр) ---
-int read_os_string(const char* key_path, const char* value_name, char* outBuffer, size_t bufferSize) {
-    HKEY hKey;
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE, key_path, 0, KEY_READ, &hKey) == ERROR_SUCCESS) {
-        DWORD type;
-        DWORD size = (DWORD)bufferSize;
-        if (RegQueryValueExA(hKey, value_name, NULL, &type, (LPBYTE)outBuffer, &size) == ERROR_SUCCESS) {
-            RegCloseKey(hKey);
-            return 1;
-        }
-        RegCloseKey(hKey);
-    }
-    return 0;
-}
-
-void scan_motherboard(int *vm_score) {
-    const char* bios_key = "HARDWARE\\DESCRIPTION\\System\\BIOS";
-    char buffer[256];
-
-    if (read_os_string(bios_key, "SystemManufacturer", buffer, sizeof(buffer)))
-        *vm_score += check_for_vm_markers(buffer, "SystemManufacturer");
-
-    if (read_os_string(bios_key, "SystemProductName", buffer, sizeof(buffer)))
-        *vm_score += check_for_vm_markers(buffer, "SystemProductName");
-
-    if (read_os_string(bios_key, "BaseBoardManufacturer", buffer, sizeof(buffer)))
-        *vm_score += check_for_vm_markers(buffer, "BaseBoardManufacturer");
-}
-
-#elif defined(__linux__)
-// --- РЕАЛИЗАЦИЯ ДЛЯ LINUX (Через файловую систему sysfs) ---
-int read_os_string(const char* filepath, char* outBuffer, size_t bufferSize) {
-    FILE* file = fopen(filepath, "r");
-    if (file != NULL) {
-        if (fgets(outBuffer, bufferSize, file) != NULL) {
-            // Удаляем символ переноса строки (\n) в конце, если он есть
-            outBuffer[strcspn(outBuffer, "\r\n")] = 0;
-            fclose(file);
-            return 1;
-        }
-        fclose(file);
-    }
-    return 0; // Не удалось открыть файл или прочитать
-}
-
-void scan_motherboard(int *vm_score) {
-    char buffer[256];
-
-    // Производитель системы (Sys Vendor)
-    if (read_os_string("/sys/class/dmi/id/sys_vendor", buffer, sizeof(buffer)))
-        *vm_score += check_for_vm_markers(buffer, "sys_vendor");
-
-    // Имя продукта (Product Name)
-    if (read_os_string("/sys/class/dmi/id/product_name", buffer, sizeof(buffer)))
-        *vm_score += check_for_vm_markers(buffer, "product_name");
-
-    // Производитель материнской платы (Board Vendor)
-    if (read_os_string("/sys/class/dmi/id/board_vendor", buffer, sizeof(buffer)))
-        *vm_score += check_for_vm_markers(buffer, "board_vendor");
+    // 3. Отличаем настоящую виртуалку Hyper-V от Хоста Windows (Root Partition)
+    if (strcmp(vendor, "Microsoft Hv") == 0) {
+        // Если это Microsoft, запрашиваем привилегии раздела гипервизора (Leaf 0x40000003)
+        get_cpuid(0x40000003, &eax, &ebx, &ecx, &edx);
         
-    // Название материнской платы (Board Name)
-    if (read_os_string("/sys/class/dmi/id/board_name", buffer, sizeof(buffer)))
-        *vm_score += check_for_vm_markers(buffer, "board_name");
+        // Согласно спецификации Hyper-V TLFS, 12-й бит в регистре EBX 
+        // означает наличие привилегий управления процессором (CpuManagement flag).
+        // Эти привилегии есть ТОЛЬКО у корневого раздела (Root Partition), т.е. у Хоста.
+        if ((ebx >> 12) & 1) {
+            printf("-> Verdict: You are on the PHYSICAL HOST OS with VBS/Hyper-V enabled in the background.\n");
+        } else {
+            printf("-> Verdict: You are inside a true GUEST Virtual Machine.\n");
+        }
+    }
 }
-#endif
-
-// =========================================================
-// ТОЧКА ВХОДА
-// =========================================================
 
 int main() {
-    int vm_score = 0;
-
-    printf("Scanning Motherboard/SMBIOS info for VM signatures...\n\n");
-    
-    // Функция сама выберет нужную ОС
-    scan_motherboard(&vm_score);
-
-    if (vm_score > 0) {
-        printf("\nRESULT: Virtual Machine DETECTED! (Score: %d)\n", vm_score);
-    } else {
-        printf("\nRESULT: No VM markers found in Motherboard info.\n");
-    }
-
+    check_hypervisor_details();
     return 0;
 }

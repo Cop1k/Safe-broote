@@ -23,7 +23,7 @@ void decode_cesar(char* res_str, char* hex_str){
     res_str[len] = '\0';
 }
 //Процедура для преобразования HEX в ASCII
-unsigned char hex_char_to_ascii(char symb){
+static unsigned char hex_char_to_ascii(char symb){
     if (symb >= '0' && symb <= '9') return symb - '0';
     if (symb >= 'a' && symb <= 'f') return symb - 'a' + 10;
     if (symb >= 'A' && symb <= 'F') return symb - 'A' + 10;
