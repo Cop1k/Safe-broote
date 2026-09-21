@@ -144,7 +144,7 @@ static void to_lower(char* str){
     int len = strlen(str);
     for (int i = 0; i != len; i++){
         if (str[i] > 64 && str[i] < 91){
-            str[i] -= 32;
+            str[i] += 32;
         }
     }
 }
