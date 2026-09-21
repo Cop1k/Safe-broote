@@ -5,12 +5,12 @@
 #define XOR_LEN 50
 #define MAX_LEN 256
 
-static void decode_cesar(char* res_str, char* hex_str); //Процедура для дешифровки шифра Цезаря
-unsigned char hex_char_to_ascii(char symb); //Процедура для преобразования HEX в ASCII
-static void decode_xor(char* res_str, unsigned char *data, int data_len); //Процедура для дешифровки XOR
+void decode_cesar(char* res_str, char* hex_str); //Процедура для дешифровки шифра Цезаря
+static unsigned char hex_char_to_ascii(char symb); //Процедура для преобразования HEX в ASCII
+void decode_xor(char* res_str, unsigned char *data, int data_len); //Процедура для дешифровки XOR
 
 //Процедура для дешифровки шифра Цезаря
-static void decode_cesar(char* res_str, char* hex_str){
+void decode_cesar(char* res_str, char* hex_str){
     int hex_len = strlen(hex_str);
     int len = hex_len / 2;
 
@@ -30,7 +30,7 @@ unsigned char hex_char_to_ascii(char symb){
     return 0;
 }
 //Процедура для дешифровки XOR
-static void decode_xor(char* res_str, unsigned char *data, int data_len){
+void decode_xor(char* res_str, unsigned char *data, int data_len){
     char key[MAX_LEN] = {0};
     decode_cesar(key, XOR_KEY);
 

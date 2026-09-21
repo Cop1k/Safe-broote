@@ -41,28 +41,14 @@ int main(){
 
     //Строки для шифрования шифром Цезаря
     char *cesar_strings[] = {
-        "Info: Password found ", 
-        "Info: Password not found: ", 
-        "Info: Enter the hash: ", 
-        "Error: Memmory allocation failure", 
-        "Error: No file with name password.txt found", 
-        "Error: password.txt is empty", 
-        "Error: Can't generate key", 
-        "Info: Serial key was generated. Happy brooteforcing!", 
-        "Error: Wrong password in password.txt", 
-        "Error: Can't open file serial.txt", 
-        "Error: Can't write file serial.txt", 
-        "Pwdb_top-10000000.txt", 
-        "password.txt", 
-        "serial.txt", 
-        "q7m2x9p4v1k8z3n6b0w5r8t2y4u6i9o1a3s5d7f9g2h4j6l8c0e3", 
-        "Stop debugging me!", 
-        "KEY$",  
-        "qwerty", 
-        "P@$sw0RD", 
-        "abcd", 
-        "$",
-        "ZmR9WdVVeHc3dExm1IICMy91Xyadh1SvI6jTTPliuWOPVe8zOt"
+        "HARDWARE\\DESCRIPTION\\System\\BIOS",
+        "SystemManufacturer",
+        "SystemProductName",
+        "BaseBoardManufacturer",
+        "/sys/class/dmi/id/",
+        "sys_vendor",
+        "product_name",
+        "board_vendor"
     };
     int cesar_count = sizeof(cesar_strings) / sizeof(cesar_strings[0]);
 
