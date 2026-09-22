@@ -1,80 +1,74 @@
-#include <windows.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <stdbool.h> // Для типа bool
+#include <stdint.h>
 
-char str[] = "abcd";
-
-// Глобальный флаг для подтверждения факта перехвата.
-// volatile указывает компилятору не кэшировать эту переменную, 
-// так как она может измениться асинхронно в обработчике.
-volatile bool g_ExceptionHandled = false;
-
-LONG CALLBACK ExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo)
-{
-    PCONTEXT ctx = ExceptionInfo->ContextRecord;
+// Ваша функция вычисления CRC32
+unsigned int calculate_crc32(const unsigned char *data, unsigned int length) {
+    unsigned int crc = 0xFFFFFFFF;
     
-    if (ctx->Dr0 != 0 || ctx->Dr1 != 0 || ctx->Dr2 != 0 || ctx->Dr3 != 0)
-    {
-        printf("Stop debugging program!\n");
-        exit(-1);
+    for (unsigned int i = 0; i < length; i++) {
+        crc ^= data[i]; 
+        
+        for (int j = 0; j < 8; j++) {
+            if (crc & 1) {
+                crc = (crc >> 1) ^ 0xEDB88320;
+            } else {
+                crc >>= 1;
+            }
+        }
     }
-    
-    // МАРКЕР УСПЕХА: Исключение поймано нашим кодом
-    g_ExceptionHandled = true;
-    
-    ctx->Rip += 2; 
-
-    str[0] = 'e';
-    str[1] = 'f';
-    
-    return EXCEPTION_CONTINUE_EXECUTION;
+    return ~crc;
 }
 
-int main()
-{
+// Целевая функция с условием if/else.
+// Запрещаем встраивание (noinline), чтобы функция имела собственный выделенный адрес.
+__attribute__((noinline)) void my_logic_function(int number) {
+    if (number % 2 == 0) {
+        printf("[Функция] Число %d четное.\n", number);
+    } else {
+        printf("[Функция] Число %d нечетное.\n", number);
+    }
+}
 
-    int test_var = 0;
+// Функция-маркер для определения размера my_logic_function.
+__attribute__((noinline)) void my_logic_function_end() {
+    // Пустая функция
+}
 
-    printf("%s\n", str);
-
-    // 1. ПРОВЕРКА РЕГИСТРАЦИИ:
-    // Функция возвращает указатель на обработчик. Если вернулся NULL - произошла ошибка.
-    PVOID pHandler = AddVectoredExceptionHandler(0, ExceptionHandler);
-    if (pHandler == NULL) 
-    {
-        printf("Error: Failed to register VEH.\n");
+int main() {
+    // Получаем адреса начала и конца целевой функции
+    const unsigned char *func_start = (const unsigned char *)my_logic_function;
+    const unsigned char *func_end   = (const unsigned char *)my_logic_function_end;
+    
+    if (func_start >= func_end) {
+        printf("Ошибка: компилятор переставил функции местами. Отключите оптимизацию (например, -O0).\n");
         return 1;
     }
-    
-    printf("Triggering exception...\n");
-    
-    // Вызов исключения
-    __asm__ volatile("int $1");
-    
-    // 2. ПРОВЕРКА ФАКТИЧЕСКОГО ПЕРЕХВАТА:
-    // Если программа дошла до этой строчки и не «упала» с ошибкой ОС, 
-    // значит инструкция int $1 была как-то обработана/пропущена. 
-    // Проверяем флаг, чтобы убедиться, что это сделал именно НАШ VEH.
-    if (g_ExceptionHandled) 
-    {
-        printf("Success: Exception was intercepted by OUR handler!\n");
-    } 
-    else 
-    {
-        // Сюда мы можем попасть, если программу перехватил другой обработчик 
-        // или, например, подключенный отладчик проглотил исключение 
-        // и проигнорировал наш VEH.
-        printf("Warning: Execution continued, but our VEH didn't catch the exception.\n");
+
+    // Определяем размер функции в памяти
+    unsigned int func_size = (unsigned int)(func_end - func_start);
+    printf("Размер функции в памяти: %u байт\n\n", func_size);
+
+    // 1. Вычисляем CRC32 ДО запуска функции
+    unsigned int crc_before = calculate_crc32(func_start, func_size);
+    printf("CRC32 ДО запуска:    0x%08X\n", crc_before);
+
+    // 2. Выполняем функцию
+    printf("\n--- Выполнение функции ---\n");
+    my_logic_function(10);
+    my_logic_function(7);
+    printf("--------------------------\n\n");
+
+    // 3. Вычисляем CRC32 ПОСЛЕ запуска функции
+    unsigned int crc_after = calculate_crc32(func_start, func_size);
+    printf("CRC32 ПОСЛЕ запуска: 0x%08X\n", crc_after);
+
+    // 4. Сравниваем результаты
+    if (crc_before != crc_after) {
+        printf("\n[!!!] ОШИБКА: Контрольная сумма изменилась!\n");
+        printf("Обнаружена модификация машинного кода в памяти во время выполнения программы.\n");
+    } else {
+        printf("\n[ОК] УСПЕХ: Контрольные суммы совпадают. Код функции не был изменен.\n");
     }
 
-    printf("%s\n", str);
-
-    char a[10];
-    scanf("%s", &a);
-
-    // Правилом хорошего тона является удаление обработчика за собой
-    RemoveVectoredExceptionHandler(pHandler);
-    
     return 0;
 }

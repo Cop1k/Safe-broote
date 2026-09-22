@@ -39,6 +39,11 @@
 #endif
 
 char serial_const[SERIAL_SIZE + 1] = {0}; //Серийный номер
+//Значения crc для функций, процеряющих пароль
+unsigned int crc_fake_check_1 = 0;
+unsigned int crc_fake_check_2 = 0;
+unsigned int crc_check_1 = 0;
+unsigned int crc_check_2 = 0;
 
 //Массив, содержащий псевдослучайные числа, зависимые от синуса числа i: T[i] = 4,294,967,296 * (abs(sin(i)))
 static const unsigned int white_noise_arr[64] = {
@@ -74,11 +79,14 @@ void str_read(char* input_hash); //Процедура для считывани�
 
 bool save_print(char* hex_str); //Функция для вывода HEX-строк
 bool password_read(bool mode); //Функция для считывания пароля из файла
-bool fake_check(char* pass_str); //Функция для фиктовной проверки пароля
-void second_fake_check(char* pass_str); //Процедура для второй фиктивной проверки пароля
-bool password_check(char* pass_str); //Функция для проверки пароля
-int password_second_check(); //Функция для повторной проверки пароля
+__attribute__((noinline)) bool fake_check(char* pass_str); //Функция для фиктовной проверки пароля
+__attribute__((noinline)) void second_fake_check(char* pass_str); //Процедура для второй фиктивной проверки пароля
+__attribute__((noinline)) bool password_check(char* pass_str); //Функция для проверки пароля
+__attribute__((noinline)) int password_second_check(); //Функция для повторной проверки пароля
+__attribute__((noinline)) void dummy_len_check(); //Функция для определения размера остальных
 bool serial_gen(); //Функция для генерации серийного номера
+unsigned int calculate_crc32(const unsigned char *data, unsigned int length); //Функция для расчета CRC
+bool crc(bool mode); //Функция для сравнения CRC
 
 //Функция для сравнения двух MD5 хешей
 bool compare_md5(const unsigned char *hash_arr1, const unsigned char *hash_arr2) {
@@ -319,7 +327,7 @@ bool password_read(bool mode){
     return 0;
 }
 //Функция для фиктовной проверки пароля
-bool fake_check(char* pass_str){
+__attribute__((noinline)) bool fake_check(char* pass_str){
     char pass[MAX_LEN] = {0};
     char hex_pass[] = FAKE_TARGET_PASSWORD;
     decode_cesar(pass, hex_pass);
@@ -336,19 +344,35 @@ bool fake_check(char* pass_str){
             save_print("5879747525696A677A6C6C6E736C25726A26");
             char arr[10];
             scanf("%s", &arr);
-            exit(-1);
+            exit(1);
         }
         save_print("4A777774773F255C7774736C25756678787C747769256E7325756678787C74776933797D79"); //Error: Wrong password in password.txt
+        //Проверка на неизменность crc
+        if (crc(1)){
+            save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+            exit(1);
+        }
         return 1;
     }
     else{
         if(password_check(pass_str)) return 1;
+        //Проверка на неизменность crc
+        if (crc(1)){
+            save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+            exit(1);
+        }
         return 0;
+    }
+
+    //Проверка на неизменность crc
+    if (crc(1)){
+        save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+        exit(1);
     }
     return 1;
 }
 //Процедура для второй фиктивной проверки пароля
-void second_fake_check(char* pass_str){
+__attribute__((noinline)) void second_fake_check(char* pass_str){
     char pass[MAX_LEN] = {0};
     unsigned char xor_pass[FAKE_TARGET_PASSWORD_SIZE + 1] = FAKE_TARGET_PASSWORD;
     decode_cesar(pass, FAKE_TARGET_PASSWORD);
@@ -365,9 +389,15 @@ void second_fake_check(char* pass_str){
         serial_const[2] = '2';
         serial_const[3] = '3';
     }
+
+    //Проверка на неизменность crc
+    if (crc(1)){
+        save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+        exit(1);
+    }
 }
 //Функция для проверки пароля
-bool password_check(char* pass_str){
+__attribute__((noinline)) bool password_check(char* pass_str){
     char pass[MAX_LEN] = {0};
     unsigned char xor_pass[TARGET_PASSWORD_SIZE + 1] = TARGET_PASSWORD;
     decode_xor(pass, xor_pass, TARGET_PASSWORD_SIZE);
@@ -375,21 +405,42 @@ bool password_check(char* pass_str){
         memset(pass, 0, MAX_LEN);
         if(serial_gen()){
             save_print("4A777774773F254866732C79256C6A736A7766796A25706A7E"); //Error: Can't generate key
+            //Проверка на неизменность crc
+            if (crc(1)){
+                save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+                exit(1);
+            }
             return 1;   
         }
         else{
             save_print("4E736B743F25586A776E667125706A7E257C6678256C6A736A7766796A6933254D6675757E2567777474796A6B7477686E736C26"); //Info: Serial key was generated. Happy brooteforcing!
             printf("\n");
+            //Проверка на неизменность crc
+            if (crc(1)){
+                save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+                exit(1);
+            }
             return 0; 
         }   
     }
     else{
         save_print("4A777774773F255C7774736C25756678787C747769256E7325756678787C74776933797D79"); //Error: Wrong password in password.txt
+        //Проверка на неизменность crc
+        if (crc(1)){
+            save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+            exit(1);
+        }
         return 1;
     }
+    //Проверка на неизменность crc
+    if (crc(1)){
+        save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+        exit(1);
+        }
+    return 1;
 }
 //Функция для повторной проверки пароля
-int password_second_check(){
+__attribute__((noinline)) int password_second_check(){
     char filename[MAX_LEN] = {0};
     char hex_name[] = "756678787C74776933797D79"; //password.txt
     decode_cesar(filename, hex_name);
@@ -398,12 +449,24 @@ int password_second_check(){
     memset(filename, 0, MAX_LEN);
     if (pass_file == NULL) {
         save_print("4A777774773F255374256B6E716A257C6E796D257366726A25756678787C74776933797D79256B747A7369"); //Error: No file with name password.txt found
+        
+        //Проверка на неизменность crc
+        if (crc(1)){
+            save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+            exit(1);
+        }
         return 1;
     }
     char pass_str[100] = {0};
     if (fgets(pass_str, 100, pass_file) == NULL) {
         save_print("4A777774773F25756678787C74776933797D79256E78256A7275797Ec"); //Error: password.txt is empty
         fclose(pass_file);
+
+        //Проверка на неизменность crc
+        if (crc(1)){
+            save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+            exit(1);
+        }
         return 1;
     }
     fclose(pass_file);
@@ -428,7 +491,16 @@ int password_second_check(){
     }
     memset(pass, 0, MAX_LEN);
 
+    //Проверка на неизменность crc
+    if (crc(1)){
+        save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+        exit(1);
+    }
     return (int)diff;
+}
+//Функция для определения размера остальных
+__attribute__((noinline)) void dummy_len_check(){
+
 }
 //Функция для генерации серийного номера
 bool serial_gen(){
@@ -477,22 +549,42 @@ bool serial_gen(){
     memset(serial, 0, MAX_LEN);   
     return 0;
 }
-
-unsigned int calculate_crc32(const unsigned char *data, unsigned int length) {
+//Функция для расчета CRC
+unsigned int calculate_crc32(const unsigned char *data, unsigned int length){
     unsigned int crc = 0xFFFFFFFF;
-    
-    for (unsigned int i = 0; i < length; i++) {
-        crc ^= data[i]; // Теперь data[i] берет ровно 1 байт (8 бит)
-        
-        for (int j = 0; j < 8; j++) {
-            if (crc & 1) {
-                crc = (crc >> 1) ^ 0xEDB88320;
-            } else {
-                crc >>= 1;
-            }
+    for(unsigned int i = 0; i < length; i++){
+        crc ^= data[i];
+        for(int j = 0; j < 8; j++){
+            if (crc & 1) crc = (crc >> 1) ^ 0xEDB88320;
+            else crc >>= 1;
         }
     }
     return ~crc;
+}
+//Функция для сравнения CRC
+bool crc(bool mode){
+    //Начальные адреса функций
+    const unsigned char *fake_check_1 = (const unsigned char*)fake_check;
+    const unsigned char *fake_check_2 = (const unsigned char*)second_fake_check;
+    const unsigned char *check_1 = (const unsigned char*)password_check;
+    const unsigned char *check_2 = (const unsigned char*)password_second_check;
+    const unsigned char *end = (const unsigned char*)dummy_len_check;
+    //Первичный расчет crc
+    if (!mode){
+        crc_fake_check_1 = calculate_crc32(fake_check_1, (unsigned int)(fake_check_2 - fake_check_1));
+        crc_fake_check_2 = calculate_crc32(fake_check_2, (unsigned int)(check_1 - fake_check_2));
+        crc_check_1 = calculate_crc32(check_1, (unsigned int)(check_2 - check_1));
+        crc_check_2 = calculate_crc32(check_2, (unsigned int)(end - check_2));
+        return 0;
+    }
+    //Проверка crc
+    else{
+        if(crc_fake_check_1 != calculate_crc32(fake_check_1, (unsigned int)(fake_check_2 - fake_check_1))) return 1;
+        if(crc_fake_check_2 != calculate_crc32(fake_check_2, (unsigned int)(check_1 - fake_check_2))) return 1;
+        if(crc_check_1 != calculate_crc32(check_1, (unsigned int)(check_2 - check_1))) return 1;
+        if(crc_check_2 != calculate_crc32(check_2, (unsigned int)(end - check_2))) return 1;
+    }
+    return 0;
 }
 
 int main(){
@@ -509,6 +601,8 @@ int main(){
         save_print("4A777774773F255B6E77797A6671255266686D6E736A25696A796A68796A69"); //Error: Virtual Machine detected
         return 1; 
     }
+
+    crc(0); //Расчет crc
 
     //printf("%s\n", serial_const);
 
