@@ -41,7 +41,7 @@ int main(){
 
     //Строки для шифрования шифром Цезаря
     char *cesar_strings[] = {
-        "Stop debugging program"
+        "Error: Virtual Machine detected"
     };
     int cesar_count = sizeof(cesar_strings) / sizeof(cesar_strings[0]);
 

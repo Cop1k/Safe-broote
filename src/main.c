@@ -20,6 +20,7 @@
 #define TARGET_PASSWORD "\x2B\x1A\x37\x4B\x23\x1D" //qwerty
 #define TARGET_PASSWORD_SIZE 6
 #define FAKE_TARGET_PASSWORD "554529787C355749" //P@$sw0RD
+#define FAKE_TARGET_PASSWORD_SIZE 16
 
 #if defined (_WIN32)
     BOOL isDebugged = TRUE;
@@ -37,7 +38,7 @@
         
 #endif
 
-char serial_const[SERIAL_SIZE + 1] = {0};
+char serial_const[SERIAL_SIZE + 1] = {0}; //Серийный номер
 
 //Массив, содержащий псевдослучайные числа, зависимые от синуса числа i: T[i] = 4,294,967,296 * (abs(sin(i)))
 static const unsigned int white_noise_arr[64] = {
@@ -71,15 +72,12 @@ void md5(const unsigned char *input_str, int input_len, unsigned char *hash); //
 void hash_selection(char* input_hash); //Процедура для подбора хеша
 void str_read(char* input_hash); //Процедура для считывания входной строки
 
-void bad_pass_read(char* input_hash); //Дублирование процедуры для считывания входной строки
-
 bool save_print(char* hex_str); //Функция для вывода HEX-строк
-void decode_cesar(char* res_str, char* hex_str); //Функция для дешифровки HEX-строк
-unsigned char hex_char_to_val(char symb); //Функция для преобразования HEX в ASCII
-int password_second_check(); //Функция для повторной проверки пароля
-bool password_read(); //Функция для считывания пароля из файла
+bool password_read(bool mode); //Функция для считывания пароля из файла
 bool fake_check(char* pass_str); //Функция для фиктовной проверки пароля
+void second_fake_check(char* pass_str); //Процедура для второй фиктивной проверки пароля
 bool password_check(char* pass_str); //Функция для проверки пароля
+int password_second_check(); //Функция для повторной проверки пароля
 bool serial_gen(); //Функция для генерации серийного номера
 
 //Функция для сравнения двух MD5 хешей
@@ -278,21 +276,7 @@ void hash_selection(char* input_hash){
 //Процедура для считывания входной строки
 void str_read(char* input_hash){
     save_print("4A73796A7725796D6A256D66786D3F25"); //Info: Enter the hash:
-    //if(password_read()){
-        //bad_pass_read(input_hash);
-    //}
-    //else{
-        //Считывание не более 32 символов
-        scanf("%32s", input_hash); 
-        if(strlen(input_hash) != 32){
-            exit(1);
-        }
-    //}
-}
-
-//Дублирование процедуры для считывания входной строки
-void bad_pass_read(char* input_hash){
-    //Считывание не более 32 символов
+    password_read(1);
     scanf("%32s", input_hash); 
     if(strlen(input_hash) != 32){
         exit(1);
@@ -306,7 +290,104 @@ bool save_print(char* hex_str){
     printf("%s", res_str);
     memset(res_str, 0, MAX_LEN);
 }
+//Функция для считывания пароля из файла
+bool password_read(bool mode){
+    char filename[MAX_LEN] = {0};
+    char hex_name[] = "756678787C74776933797D79"; //password.txt
+    decode_cesar(filename, hex_name);
 
+    FILE *pass_file = fopen(filename, "r");
+    memset(filename, 0, MAX_LEN);
+    if (pass_file == NULL) {
+        save_print("4A777774773F255374256B6E716A257C6E796D257366726A25756678787C74776933797D79256B747A7369"); //Error: No file with name password.txt found
+        return 1;
+    }
+    char pass_str[100] = {0};
+    if (fgets(pass_str, 100, pass_file) == NULL) {
+        save_print("4A777774773F25756678787C74776933797D79256E78256A7275797Ec"); //Error: password.txt is empty
+        fclose(pass_file);
+        return 1;
+    }
+    fclose(pass_file);
+
+    if(mode == 0){
+        if(fake_check(pass_str)) return 1;
+    }
+    else{
+        second_fake_check(pass_str);
+    }
+    return 0;
+}
+//Функция для фиктовной проверки пароля
+bool fake_check(char* pass_str){
+    char pass[MAX_LEN] = {0};
+    char hex_pass[] = FAKE_TARGET_PASSWORD;
+    decode_cesar(pass, hex_pass);
+    if (strcmp(pass, pass_str) == 0){
+        memset(pass, 0, MAX_LEN);
+
+        #if defined (_WIN32)
+            RaiseException(EXCEPTION_INT_DIVIDE_BY_ZERO, 0, 0, NULL); //Вызов исключения (деление на 0)
+        #elif defined (__linux__)
+            raise(SIGFPE); //Вызов исключения (деление на 0)
+        #endif
+
+        if (isDebugged) {
+            save_print("5879747525696A677A6C6C6E736C25726A26");
+            char arr[10];
+            scanf("%s", &arr);
+            exit(-1);
+        }
+        save_print("4A777774773F255C7774736C25756678787C747769256E7325756678787C74776933797D79"); //Error: Wrong password in password.txt
+        return 1;
+    }
+    else{
+        if(password_check(pass_str)) return 1;
+        return 0;
+    }
+    return 1;
+}
+//Процедура для второй фиктивной проверки пароля
+void second_fake_check(char* pass_str){
+    char pass[MAX_LEN] = {0};
+    unsigned char xor_pass[FAKE_TARGET_PASSWORD_SIZE + 1] = FAKE_TARGET_PASSWORD;
+    decode_cesar(pass, FAKE_TARGET_PASSWORD);
+    if (MAX_LEN ^ 2 > 0 || strcmp(pass, pass_str) == 0){
+        memset(pass, 0, MAX_LEN); 
+        serial_const[2] = 'x';
+        serial_const[3] = 'w';
+    }
+    else if(strcmp(FAKE_TARGET_PASSWORD, pass_str) == 0){
+        serial_const[2] = 'c';
+        serial_const[3] = 'd';
+    }
+    else{
+        serial_const[2] = '2';
+        serial_const[3] = '3';
+    }
+}
+//Функция для проверки пароля
+bool password_check(char* pass_str){
+    char pass[MAX_LEN] = {0};
+    unsigned char xor_pass[TARGET_PASSWORD_SIZE + 1] = TARGET_PASSWORD;
+    decode_xor(pass, xor_pass, TARGET_PASSWORD_SIZE);
+    if (strcmp(pass, pass_str) == 0){
+        memset(pass, 0, MAX_LEN);
+        if(serial_gen()){
+            save_print("4A777774773F254866732C79256C6A736A7766796A25706A7E"); //Error: Can't generate key
+            return 1;   
+        }
+        else{
+            save_print("4E736B743F25586A776E667125706A7E257C6678256C6A736A7766796A6933254D6675757E2567777474796A6B7477686E736C26"); //Info: Serial key was generated. Happy brooteforcing!
+            printf("\n");
+            return 0; 
+        }   
+    }
+    else{
+        save_print("4A777774773F255C7774736C25756678787C747769256E7325756678787C74776933797D79"); //Error: Wrong password in password.txt
+        return 1;
+    }
+}
 //Функция для повторной проверки пароля
 int password_second_check(){
     char filename[MAX_LEN] = {0};
@@ -348,80 +429,6 @@ int password_second_check(){
     memset(pass, 0, MAX_LEN);
 
     return (int)diff;
-}
-//Функция для считывания пароля из файла
-bool password_read(){
-    char filename[MAX_LEN] = {0};
-    char hex_name[] = "756678787C74776933797D79"; //password.txt
-    decode_cesar(filename, hex_name);
-
-    FILE *pass_file = fopen(filename, "r");
-    memset(filename, 0, MAX_LEN);
-    if (pass_file == NULL) {
-        save_print("4A777774773F255374256B6E716A257C6E796D257366726A25756678787C74776933797D79256B747A7369"); //Error: No file with name password.txt found
-        return 1;
-    }
-    char pass_str[100] = {0};
-    if (fgets(pass_str, 100, pass_file) == NULL) {
-        save_print("4A777774773F25756678787C74776933797D79256E78256A7275797Ec"); //Error: password.txt is empty
-        fclose(pass_file);
-        return 1;
-    }
-    fclose(pass_file);
-
-    if(fake_check(pass_str)) return 1;
-    return 0;
-}
-//Функция для фиктовной проверки пароля
-bool fake_check(char* pass_str){
-    char pass[MAX_LEN] = {0};
-    char hex_pass[] = FAKE_TARGET_PASSWORD;
-    decode_cesar(pass, hex_pass);
-    if (strcmp(pass, pass_str) == 0){
-        memset(pass, 0, MAX_LEN);
-
-        #if defined (_WIN32)
-            RaiseException(EXCEPTION_INT_DIVIDE_BY_ZERO, 0, 0, NULL); //Вызов исключения (деление на 0)
-        #elif defined (__linux__)
-            raise(SIGFPE); //Вызов исключения (деление на 0)
-        #endif
-
-        if (isDebugged) {
-            save_print("5879747525696A677A6C6C6E736C25726A26");
-            char arr[10];
-            scanf("%s", &arr);
-            exit(-1);
-        }
-        save_print("4A777774773F255C7774736C25756678787C747769256E7325756678787C74776933797D79"); //Error: Wrong password in password.txt
-        return 1;
-    }
-    else{
-        if(password_check(pass_str)) return 1;
-        return 0;
-    }
-    return 1;
-}
-//Функция для проверки пароля
-bool password_check(char* pass_str){
-    char pass[MAX_LEN] = {0};
-    unsigned char xor_pass[TARGET_PASSWORD_SIZE + 1] = TARGET_PASSWORD;
-    decode_xor(pass, xor_pass, TARGET_PASSWORD_SIZE);
-    if (strcmp(pass, pass_str) == 0){
-        memset(pass, 0, MAX_LEN);
-        if(serial_gen()){
-            save_print("4A777774773F254866732C79256C6A736A7766796A25706A7E"); //Error: Can't generate key
-            return 1;   
-        }
-        else{
-            save_print("4E736B743F25586A776E667125706A7E257C6678256C6A736A7766796A6933254D6675757E2567777474796A6B7477686E736C26"); //Info: Serial key was generated. Happy brooteforcing!
-            printf("\n");
-            return 0; 
-        }   
-    }
-    else{
-        save_print("4A777774773F255C7774736C25756678787C747769256E7325756678787C74776933797D79"); //Error: Wrong password in password.txt
-        return 1;
-    }
 }
 //Функция для генерации серийного номера
 bool serial_gen(){
@@ -499,13 +506,13 @@ int main(){
 
     //Функция для обнаружения виртуальной машины
     if(vm_decision()){
-        printf("VW detected");
+        save_print("4A777774773F255B6E77797A6671255266686D6E736A25696A796A68796A69"); //Error: Virtual Machine detected
         return 1; 
     }
 
     //printf("%s\n", serial_const);
 
-    if(password_read()) return 1; //Функция для считывания пароля из файла
+    if(password_read(0)) return 1; //Функция для считывания пароля из файла
     
     char input_hash[33] = {0};
     str_read(input_hash); //Процедура для считывания входной строки
