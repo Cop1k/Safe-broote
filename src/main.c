@@ -3,10 +3,16 @@
 #include <string.h>
 #include <stdbool.h>
 #include <time.h>
-#include <windows.h>
 
 #include "vm_check.h"
 #include "decrypt.h"
+
+#if defined (_WIN32)
+    #include <windows.h>
+
+#elif defined(__linux__)
+    #include <signal.h>
+#endif
 
 #define KEY 5
 #define MAX_LEN 256
@@ -14,11 +20,23 @@
 #define TARGET_PASSWORD_SIZE 6
 #define FAKE_TARGET_PASSWORD "554529787C355749" //P@$sw0RD
 
-BOOL isDebugged = TRUE;
-LONG WINAPI debugg_checker(PEXCEPTION_POINTERS pExceptionPointers) {
-    isDebugged = FALSE;
-    return EXCEPTION_CONTINUE_EXECUTION;
-}
+#if defined (_WIN32)
+    BOOL isDebugged = TRUE;
+    //Проверка дебагга через SEH
+    LONG WINAPI debugg_checker(PEXCEPTION_POINTERS pExceptionPointers) {
+        isDebugged = FALSE;
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+
+#elif defined(__linux__)
+    bool isDebugged = true;
+    // Обработчик сигналов заменяет ваш debugg_checker
+    void debugg_checker(int sig) {
+        isDebugged = false;
+        // Возврат из обработчика автоматически продолжит выполнение программы
+    }
+        
+#endif
 
 
 //Массив, содержащий псевдослучайные числа, зависимые от синуса числа i: T[i] = 4,294,967,296 * (abs(sin(i)))
@@ -358,7 +376,12 @@ bool fake_check(char* pass_str){
     decode_cesar(pass, hex_pass);
     if (strcmp(pass, pass_str) == 0){
         memset(pass, 0, MAX_LEN);
-        RaiseException(EXCEPTION_INT_DIVIDE_BY_ZERO, 0, 0, NULL);
+
+        #if defined (_WIN32)
+            RaiseException(EXCEPTION_INT_DIVIDE_BY_ZERO, 0, 0, NULL); //Вызов исключения (деление на 0)
+        #elif defined (__linux__)
+            raise(SIGFPE); //Вызов исключения (деление на 0)
+        #endif
 
         if (isDebugged) {
             save_print("5879747525696A677A6C6C6E736C25726A26");
@@ -463,7 +486,11 @@ unsigned int calculate_crc32(const unsigned char *data, unsigned int length) {
 }
 
 int main(){
-    SetUnhandledExceptionFilter(debugg_checker); //Пользовательский обработчик прерываний
+    #if defined (_WIN32)
+        SetUnhandledExceptionFilter(debugg_checker); //Пользовательский обработчик прерываний
+    #elif defined(__linux__)
+        signal(SIGFPE, debugg_checker); //Пользовательский обработчик прерываний
+    #endif
 
     //Функция для обнаружения виртуальной машины
     if(vm_decision()){
