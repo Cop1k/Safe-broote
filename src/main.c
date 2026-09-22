@@ -3,16 +3,10 @@
 #include <string.h>
 #include <stdbool.h>
 #include <time.h>
+#include <windows.h>
 
 #include "vm_check.h"
 #include "decrypt.h"
-
-#if defined (_WIN32)
-    #include <windows.h>
-
-#elif defined(__linux__)
-    #include <signal.h>
-#endif
 
 #define MAX_LEN 256
 #define SERIAL_SIZE 10
@@ -22,21 +16,12 @@
 #define FAKE_TARGET_PASSWORD "554529787C355749" //P@$sw0RD
 #define FAKE_TARGET_PASSWORD_SIZE 16
 
-#if defined (_WIN32)
-    BOOL isDebugged = TRUE;
-    //Проверка дебагга через SEH
-    LONG WINAPI debugg_checker(PEXCEPTION_POINTERS pExceptionPointers) {
-        isDebugged = FALSE;
-        return EXCEPTION_CONTINUE_EXECUTION;
-    }
-
-#elif defined(__linux__)
-    bool isDebugged = true;
-    void debugg_checker(int sig) {
-        isDebugged = false;
-    }
-        
-#endif
+//Проверка дебагга через SEH
+BOOL isDebugged = TRUE;
+LONG WINAPI debugg_checker(PEXCEPTION_POINTERS pExceptionPointers) {
+    isDebugged = FALSE;
+    return EXCEPTION_CONTINUE_EXECUTION;
+}
 
 char serial_const[SERIAL_SIZE + 1] = {0}; //Серийный номер
 //Значения crc для функций, процеряющих пароль
@@ -334,11 +319,7 @@ __attribute__((noinline)) bool fake_check(char* pass_str){
     if (strcmp(pass, pass_str) == 0){
         memset(pass, 0, MAX_LEN);
 
-        #if defined (_WIN32)
-            RaiseException(EXCEPTION_INT_DIVIDE_BY_ZERO, 0, 0, NULL); //Вызов исключения (деление на 0)
-        #elif defined (__linux__)
-            raise(SIGFPE); //Вызов исключения (деление на 0)
-        #endif
+        RaiseException(EXCEPTION_INT_DIVIDE_BY_ZERO, 0, 0, NULL); //Вызов исключения (деление на 0)
 
         if (isDebugged) {
             save_print("5879747525696A677A6C6C6E736C25726A26");
@@ -349,7 +330,7 @@ __attribute__((noinline)) bool fake_check(char* pass_str){
         save_print("4A777774773F255C7774736C25756678787C747769256E7325756678787C74776933797D79"); //Error: Wrong password in password.txt
         //Проверка на неизменность crc
         if (crc(1)){
-            save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+            save_print("4974257374792579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
             exit(1);
         }
         return 1;
@@ -358,7 +339,7 @@ __attribute__((noinline)) bool fake_check(char* pass_str){
         if(password_check(pass_str)) return 1;
         //Проверка на неизменность crc
         if (crc(1)){
-            save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+            save_print("4974257374792579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
             exit(1);
         }
         return 0;
@@ -366,7 +347,7 @@ __attribute__((noinline)) bool fake_check(char* pass_str){
 
     //Проверка на неизменность crc
     if (crc(1)){
-        save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+        save_print("4974257374792579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
         exit(1);
     }
     return 1;
@@ -392,7 +373,7 @@ __attribute__((noinline)) void second_fake_check(char* pass_str){
 
     //Проверка на неизменность crc
     if (crc(1)){
-        save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+        save_print("4974257374792579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
         exit(1);
     }
 }
@@ -407,7 +388,7 @@ __attribute__((noinline)) bool password_check(char* pass_str){
             save_print("4A777774773F254866732C79256C6A736A7766796A25706A7E"); //Error: Can't generate key
             //Проверка на неизменность crc
             if (crc(1)){
-                save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+                save_print("4974257374792579777E25797425686D66736C6A2574772578706E7525687768"); //Do not try to change or skip crc
                 exit(1);
             }
             return 1;   
@@ -417,7 +398,7 @@ __attribute__((noinline)) bool password_check(char* pass_str){
             printf("\n");
             //Проверка на неизменность crc
             if (crc(1)){
-                save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+                save_print("4974257374792579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
                 exit(1);
             }
             return 0; 
@@ -427,14 +408,14 @@ __attribute__((noinline)) bool password_check(char* pass_str){
         save_print("4A777774773F255C7774736C25756678787C747769256E7325756678787C74776933797D79"); //Error: Wrong password in password.txt
         //Проверка на неизменность crc
         if (crc(1)){
-            save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+            save_print("4974257374792579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
             exit(1);
         }
         return 1;
     }
     //Проверка на неизменность crc
     if (crc(1)){
-        save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+        save_print("4974257374792579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
         exit(1);
         }
     return 1;
@@ -452,7 +433,7 @@ __attribute__((noinline)) int password_second_check(){
         
         //Проверка на неизменность crc
         if (crc(1)){
-            save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+            save_print("4974257374792579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
             exit(1);
         }
         return 1;
@@ -464,7 +445,7 @@ __attribute__((noinline)) int password_second_check(){
 
         //Проверка на неизменность crc
         if (crc(1)){
-            save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+            save_print("4974257374792579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
             exit(1);
         }
         return 1;
@@ -493,7 +474,7 @@ __attribute__((noinline)) int password_second_check(){
 
     //Проверка на неизменность crc
     if (crc(1)){
-        save_print("49742573747925686D66736C6A2579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
+        save_print("4974257374792579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
         exit(1);
     }
     return (int)diff;
@@ -588,11 +569,7 @@ bool crc(bool mode){
 }
 
 int main(){
-    #if defined (_WIN32)
-        SetUnhandledExceptionFilter(debugg_checker); //Пользовательский обработчик прерываний
-    #elif defined(__linux__)
-        signal(SIGFPE, debugg_checker); //Пользовательский обработчик прерываний
-    #endif
+    SetUnhandledExceptionFilter(debugg_checker); //Пользовательский обработчик прерываний
 
     //printf("%s\n", serial_const);
 
