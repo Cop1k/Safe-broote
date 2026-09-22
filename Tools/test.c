@@ -1,62 +1,80 @@
+#include <windows.h>
 #include <stdio.h>
-#include <string.h>
+#include <stdlib.h>
+#include <stdbool.h> // Для типа bool
 
-// Макрос для кроссплатформенного вызова CPUID
-#ifdef _MSC_VER
-    #include <intrin.h> // Для MSVC (Windows)
-    void get_cpuid(unsigned int leaf, unsigned int* eax, unsigned int* ebx, unsigned int* ecx, unsigned int* edx) {
-        int info[4];
-        __cpuid(info, leaf);
-        *eax = info[0]; *ebx = info[1]; *ecx = info[2]; *edx = info[3];
+char str[] = "abcd";
+
+// Глобальный флаг для подтверждения факта перехвата.
+// volatile указывает компилятору не кэшировать эту переменную, 
+// так как она может измениться асинхронно в обработчике.
+volatile bool g_ExceptionHandled = false;
+
+LONG CALLBACK ExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo)
+{
+    PCONTEXT ctx = ExceptionInfo->ContextRecord;
+    
+    if (ctx->Dr0 != 0 || ctx->Dr1 != 0 || ctx->Dr2 != 0 || ctx->Dr3 != 0)
+    {
+        printf("Stop debugging program!\n");
+        exit(-1);
     }
-#else
-    #include <cpuid.h> // Для GCC/Clang
-    void get_cpuid(unsigned int leaf, unsigned int* eax, unsigned int* ebx, unsigned int* ecx, unsigned int* edx) {
-        __cpuid(leaf, *eax, *ebx, *ecx, *edx);
-    }
-#endif
+    
+    // МАРКЕР УСПЕХА: Исключение поймано нашим кодом
+    g_ExceptionHandled = true;
+    
+    ctx->Rip += 2; 
 
-void check_hypervisor_details() {
-    unsigned int eax = 0, ebx = 0, ecx = 0, edx = 0;
-
-    // 1. Сначала проверяем 31-й бит, чтобы узнать, активен ли гипервизор вообще
-    get_cpuid(1, &eax, &ebx, &ecx, &edx);
-    if (!((ecx >> 31) & 1)) {
-        printf("Hypervisor NOT detected. You are on a pure Host machine.\n");
-        return;
-    }
-    printf("Hypervisor present bit is set (1).\n");
-
-    // 2. Получаем вендора гипервизора (EAX = 0x40000000)
-    get_cpuid(0x40000000, &eax, &ebx, &ecx, &edx);
-
-    char vendor[13]; // 12 байт + нуль-терминатор
-    // ВАЖНО: Порядок регистров для гипервизора — EBX, ECX, EDX
-    // (в отличие от процессоров, где порядок EBX, EDX, ECX)
-    memcpy(vendor + 0, &ebx, 4);
-    memcpy(vendor + 4, &ecx, 4);
-    memcpy(vendor + 8, &edx, 4);
-    vendor[12] = '\0'; // Завершаем строку
-
-    printf("Hypervisor Vendor: '%s'\n", vendor);
-
-    // 3. Отличаем настоящую виртуалку Hyper-V от Хоста Windows (Root Partition)
-    if (strcmp(vendor, "Microsoft Hv") == 0) {
-        // Если это Microsoft, запрашиваем привилегии раздела гипервизора (Leaf 0x40000003)
-        get_cpuid(0x40000003, &eax, &ebx, &ecx, &edx);
-        
-        // Согласно спецификации Hyper-V TLFS, 12-й бит в регистре EBX 
-        // означает наличие привилегий управления процессором (CpuManagement flag).
-        // Эти привилегии есть ТОЛЬКО у корневого раздела (Root Partition), т.е. у Хоста.
-        if ((ebx >> 12) & 1) {
-            printf("-> Verdict: You are on the PHYSICAL HOST OS with VBS/Hyper-V enabled in the background.\n");
-        } else {
-            printf("-> Verdict: You are inside a true GUEST Virtual Machine.\n");
-        }
-    }
+    str[0] = 'e';
+    str[1] = 'f';
+    
+    return EXCEPTION_CONTINUE_EXECUTION;
 }
 
-int main() {
-    check_hypervisor_details();
+int main()
+{
+
+    int test_var = 0;
+
+    printf("%s\n", str);
+
+    // 1. ПРОВЕРКА РЕГИСТРАЦИИ:
+    // Функция возвращает указатель на обработчик. Если вернулся NULL - произошла ошибка.
+    PVOID pHandler = AddVectoredExceptionHandler(0, ExceptionHandler);
+    if (pHandler == NULL) 
+    {
+        printf("Error: Failed to register VEH.\n");
+        return 1;
+    }
+    
+    printf("Triggering exception...\n");
+    
+    // Вызов исключения
+    __asm__ volatile("int $1");
+    
+    // 2. ПРОВЕРКА ФАКТИЧЕСКОГО ПЕРЕХВАТА:
+    // Если программа дошла до этой строчки и не «упала» с ошибкой ОС, 
+    // значит инструкция int $1 была как-то обработана/пропущена. 
+    // Проверяем флаг, чтобы убедиться, что это сделал именно НАШ VEH.
+    if (g_ExceptionHandled) 
+    {
+        printf("Success: Exception was intercepted by OUR handler!\n");
+    } 
+    else 
+    {
+        // Сюда мы можем попасть, если программу перехватил другой обработчик 
+        // или, например, подключенный отладчик проглотил исключение 
+        // и проигнорировал наш VEH.
+        printf("Warning: Execution continued, but our VEH didn't catch the exception.\n");
+    }
+
+    printf("%s\n", str);
+
+    char a[10];
+    scanf("%s", &a);
+
+    // Правилом хорошего тона является удаление обработчика за собой
+    RemoveVectoredExceptionHandler(pHandler);
+    
     return 0;
 }

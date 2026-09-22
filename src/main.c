@@ -14,8 +14,9 @@
     #include <signal.h>
 #endif
 
-#define KEY 5
 #define MAX_LEN 256
+#define SERIAL_SIZE 10
+#define KEY 5
 #define TARGET_PASSWORD "\x2B\x1A\x37\x4B\x23\x1D" //qwerty
 #define TARGET_PASSWORD_SIZE 6
 #define FAKE_TARGET_PASSWORD "554529787C355749" //P@$sw0RD
@@ -30,14 +31,13 @@
 
 #elif defined(__linux__)
     bool isDebugged = true;
-    // Обработчик сигналов заменяет ваш debugg_checker
     void debugg_checker(int sig) {
         isDebugged = false;
-        // Возврат из обработчика автоматически продолжит выполнение программы
     }
         
 #endif
 
+char serial_const[SERIAL_SIZE + 1] = {0};
 
 //Массив, содержащий псевдослучайные числа, зависимые от синуса числа i: T[i] = 4,294,967,296 * (abs(sin(i)))
 static const unsigned int white_noise_arr[64] = {
@@ -250,6 +250,7 @@ void hash_selection(char* input_hash){
             md5((unsigned char*)file_str, iter, hash); //Рассчет MD5 для считанной строки
             //Сравнение входного и полученного хешей
             if(compare_md5(hash, input_hash_bytes)){
+                //Сдвиг исходного результата в случае, если пароль не верный
                 int shift = password_second_check();
                 for (int i = 0; i < buf; i++) {
                     int offset = file_str[i] - 33;
@@ -333,6 +334,8 @@ int password_second_check(){
     int pass_len = strlen(pass);
     int file_pass_len = strlen(pass_str);
 
+    //XOR пароля в файле с TARGET_PASSWORD. Если они одинаковые, вернется 0
+    //Если пароли разные, в переменной diff накопится разница (через побитоовое ИЛИ) 
     unsigned int diff = 0;
     diff |= (unsigned int)(pass_len ^ file_pass_len);
 
@@ -492,11 +495,15 @@ int main(){
         signal(SIGFPE, debugg_checker); //Пользовательский обработчик прерываний
     #endif
 
+    //printf("%s\n", serial_const);
+
     //Функция для обнаружения виртуальной машины
     if(vm_decision()){
         printf("VW detected");
         return 1; 
     }
+
+    //printf("%s\n", serial_const);
 
     if(password_read()) return 1; //Функция для считывания пароля из файла
     

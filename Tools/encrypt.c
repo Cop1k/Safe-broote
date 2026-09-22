@@ -41,14 +41,7 @@ int main(){
 
     //Строки для шифрования шифром Цезаря
     char *cesar_strings[] = {
-        "HARDWARE\\DESCRIPTION\\System\\BIOS",
-        "SystemManufacturer",
-        "SystemProductName",
-        "BaseBoardManufacturer",
-        "/sys/class/dmi/id/",
-        "sys_vendor",
-        "product_name",
-        "board_vendor"
+        "Stop debugging program"
     };
     int cesar_count = sizeof(cesar_strings) / sizeof(cesar_strings[0]);
 

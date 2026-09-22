@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "decrypt.h"
+#include "vm_check.h"
 
 #if defined(_WIN32) //Windows
     #include <cpuid.h> //Для получения данных о гипервизоре
@@ -19,9 +20,41 @@
     #include <netpacket/packet.h>
     #include <cpuid.h>
     #include <stdlib.h>
+    #include <signal.h>
 #endif
 
 #define MAX_LEN 256
+
+#if defined(_WIN32)
+    volatile bool VEH_handle = false; //Флаг для обработчика VEH
+    //Обработчик VEH
+    LONG CALLBACK ExceptionHandler(PEXCEPTION_POINTERS ExceptionInfo){
+        PCONTEXT ctx = ExceptionInfo->ContextRecord;
+        //Проверка регистров процессора на аппаратные брейкпоинты
+        if(ctx->Dr0 != 0 || ctx->Dr1 != 0 || ctx->Dr2 != 0 || ctx->Dr3 != 0){
+            char output[24] = {0};
+            decode_cesar(output, "5879747525696A677A6C6C6E736C257577746C776672"); //Stop debugging program
+            printf("%s\n", output);
+            memset(output, 0, 24);
+            exit(1);
+        }
+        VEH_handle = true;
+        ctx->Rip += 2; //Для избежания цикла
+
+        serial_const[0] = 'z';
+        serial_const[1] = 'y';
+        
+        return EXCEPTION_CONTINUE_EXECUTION;
+    }
+#elif defined (__linux__)
+    static bool isDebugged = true;
+    //Аналог VEH под Linux
+    static void debugg_checker(int sig){
+        serial_const[0] = 'z';
+        serial_const[1] = 'y';
+        isDebugged = false;
+    }
+#endif
 
 static bool motherboard_check(); //Функция для проверки имени оборудования
 static bool read_os_string(char* hex_value_name, char* buff, size_t buff_size); //Функция для чтения данных об оборудовании
@@ -247,12 +280,27 @@ static bool cpu_check() {
     }
     return 1;
 }
-
 //Функция для принятия решения
 bool vm_decision(){
-    if (cpu_check()) return 1; //Проверка бита гипервизора
-    if (mac_check()) return 1; //Проверка сетвой карты
-    if (motherboard_check()) return 1; //Проверка названия материнской платы
-    
+    if (cpu_check())
+        return 1; // Проверка бита гипервизора
+    if (mac_check())
+        return 1; // Проверка сетвой карты
+    if (motherboard_check())
+        return 1; // Проверка названия материнской платы
+
+    serial_const[0] = 'a';
+    serial_const[1] = 'b';
+
+    #if defined(_WIN32)
+        PVOID pHandler = AddVectoredExceptionHandler(0, ExceptionHandler); //Инициализация VEH
+        __asm__ volatile("int $1");  //Вызов исключения отладки для обработки через VEH
+        RemoveVectoredExceptionHandler(pHandler); //Удаление VEH
+
+    #elif defined(__linux__)
+        signal(SIGFPE, debugg_checker); //Пользовательский обработчик прерываний
+        raise(SIGFPE); //Вызов исключения (деление на 0)
+    #endif
+
     return 0;
 }
