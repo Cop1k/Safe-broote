@@ -41,7 +41,7 @@ int main(){
 
     //Строки для шифрования шифром Цезаря
     char *cesar_strings[] = {
-        "Do not try to change or skip crc"
+        "Debugging is bad"
     };
     int cesar_count = sizeof(cesar_strings) / sizeof(cesar_strings[0]);
 

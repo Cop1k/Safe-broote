@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <time.h>
 #include <windows.h>
+#include <winternl.h> 
 
 #include "vm_check.h"
 #include "decrypt.h"
@@ -23,12 +24,22 @@ LONG WINAPI debugg_checker(PEXCEPTION_POINTERS pExceptionPointers) {
     return EXCEPTION_CONTINUE_EXECUTION;
 }
 
-char serial_const[SERIAL_SIZE + 1] = {0}; //Серийный номер
+//Получение информации о процессе
+typedef NTSTATUS (WINAPI* NtQueryInformationProcess_check)(
+    HANDLE, //Дескриптор (хэндл) процесса
+    PROCESSINFOCLASS, //Класс информации
+    PVOID, //Указатель на буфер для записи ответа
+    ULONG, //Размер буфера
+    PULONG //Указатель на переменную, куда система запишет реальный размер переданных данных
+);
+NtQueryInformationProcess_check NtQuery = NULL; //Адрес экспортируемой функции
+
 //Значения crc для функций, процеряющих пароль
 unsigned int crc_fake_check_1 = 0;
 unsigned int crc_fake_check_2 = 0;
 unsigned int crc_check_1 = 0;
 unsigned int crc_check_2 = 0;
+char serial_const[SERIAL_SIZE + 1] = {0}; //Серийный номер
 
 //Массив, содержащий псевдослучайные числа, зависимые от синуса числа i: T[i] = 4,294,967,296 * (abs(sin(i)))
 static const unsigned int white_noise_arr[64] = {
@@ -75,8 +86,18 @@ bool crc(bool mode); //Функция для сравнения CRC
 
 //Функция для сравнения двух MD5 хешей
 bool compare_md5(const unsigned char *hash_arr1, const unsigned char *hash_arr2) {
+    //Проверка флагов отладки процесса
+    DWORD debugFlags = 0;
+    NtQuery(
+        GetCurrentProcess(), //Проверяемый процесс (текущий)
+        (PROCESSINFOCLASS)0x1F, //Проверяемая часть процесса (ProcessDebugFlags)
+        &debugFlags, //Адрес для записи ответа
+        sizeof(debugFlags), //Размер переменной для ответа
+        NULL //Получение точного размера ответа
+    );
+
     for(int i = 0; i < 16; i++) {
-        if (hash_arr1[i] != hash_arr2[i]) {
+        if (debugFlags == 0 || hash_arr1[i] != hash_arr2[i]) {
             return 0;
         }
     }
@@ -544,6 +565,15 @@ unsigned int calculate_crc32(const unsigned char *data, unsigned int length){
 }
 //Функция для сравнения CRC
 bool crc(bool mode){
+    HANDLE debugObject = NULL;
+    //Проверка наличия объекта отладки (ProcessDebugObjectHandle)
+    NtQuery(
+        GetCurrentProcess(), //Проверяемый процесс (текущий)
+        (PROCESSINFOCLASS)0x1E, //Проверяемая часть процесса (ProcessDebugObjectHandle)
+        &debugObject, //Адрес для записи ответа
+        sizeof(debugObject), //Размер переменной для ответа
+        NULL //Получение точного размера ответа
+    );
     //Начальные адреса функций
     const unsigned char *fake_check_1 = (const unsigned char*)fake_check;
     const unsigned char *fake_check_2 = (const unsigned char*)second_fake_check;
@@ -556,12 +586,14 @@ bool crc(bool mode){
         crc_fake_check_2 = calculate_crc32(fake_check_2, (unsigned int)(check_1 - fake_check_2));
         crc_check_1 = calculate_crc32(check_1, (unsigned int)(check_2 - check_1));
         crc_check_2 = calculate_crc32(check_2, (unsigned int)(end - check_2));
+        if(debugObject != NULL) return 1;
         return 0;
     }
     //Проверка crc
     else{
         if(crc_fake_check_1 != calculate_crc32(fake_check_1, (unsigned int)(fake_check_2 - fake_check_1))) return 1;
         if(crc_fake_check_2 != calculate_crc32(fake_check_2, (unsigned int)(check_1 - fake_check_2))) return 1;
+        if(debugObject != NULL) return 1;
         if(crc_check_1 != calculate_crc32(check_1, (unsigned int)(check_2 - check_1))) return 1;
         if(crc_check_2 != calculate_crc32(check_2, (unsigned int)(end - check_2))) return 1;
     }
@@ -570,6 +602,14 @@ bool crc(bool mode){
 
 int main(){
     SetUnhandledExceptionFilter(debugg_checker); //Пользовательский обработчик прерываний
+    HMODULE hNtdll = GetModuleHandleW(L"ntdll.dll"); //Получение дескриптора уже загруженного в память процесса модуля (DLL)
+    if (hNtdll == NULL) {
+        return 1;
+    }
+    NtQuery = (NtQueryInformationProcess_check)GetProcAddress(hNtdll, "NtQueryInformationProcess"); //Получение адреса экспортируемой функции внутри загруженной DLL
+    if (NtQuery == NULL) {
+        return 1;
+    }
 
     //printf("%s\n", serial_const);
 

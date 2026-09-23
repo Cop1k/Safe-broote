@@ -1,4 +1,6 @@
 #include <string.h>
+#include <windows.h>
+#include <stdio.h>
 
 #define CESAR_KEY 5
 #define XOR_KEY "5F72573E5C695B5B6A4D6838694A7D72364E4E48527E3E365D7E66696D36587B4E3B6F595955716E7A5C54555B6A3D7F5479" //ZmR9WdVVeHc3dExm1IICMy91Xyadh1SvI6jTTPliuWOPVe8zOt
@@ -31,6 +33,14 @@ static unsigned char hex_char_to_ascii(char symb){
 }
 //Процедура для дешифровки XOR
 void decode_xor(char* res_str, unsigned char *data, int data_len){
+    //Проверка PEB
+    BYTE* pBeingDebugged = (BYTE*)(__readgsqword(0x60) + 2);
+    if(*pBeingDebugged){
+        char res_str[33] = {0};
+        decode_cesar(res_str, "496A677A6C6C6E736C256E7825676669");
+        printf("%s\n", res_str);
+    }
+
     char key[MAX_LEN] = {0};
     decode_cesar(key, XOR_KEY);
 
