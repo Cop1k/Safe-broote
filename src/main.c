@@ -16,6 +16,7 @@
 #define TARGET_PASSWORD_SIZE 6
 #define FAKE_TARGET_PASSWORD "554529787C355749" //P@$sw0RD
 #define FAKE_TARGET_PASSWORD_SIZE 16
+#define TARGET_SERIAL "\x05\x20\x3D\x57\x24\x10\x24\x67\x0E\x17"
 
 //Проверка дебагга через SEH
 BOOL isDebugged = TRUE;
@@ -73,7 +74,7 @@ void md5(const unsigned char *input_str, int input_len, unsigned char *hash); //
 void hash_selection(char* input_hash); //Процедура для подбора хеша
 void str_read(char* input_hash); //Процедура для считывания входной строки
 
-bool save_print(char* hex_str); //Функция для вывода HEX-строк
+void save_print(char* hex_str); //Функция для вывода HEX-строк
 bool password_read(bool mode); //Функция для считывания пароля из файла
 __attribute__((noinline)) bool fake_check(char* pass_str); //Функция для фиктовной проверки пароля
 __attribute__((noinline)) void second_fake_check(char* pass_str); //Процедура для второй фиктивной проверки пароля
@@ -280,6 +281,7 @@ void hash_selection(char* input_hash){
                     file_str[i] = (char)(33 + (offset + abs(shift)) % 94);
                 }
                 save_print("4E736B743F25556678787C747769256B747A73693F25"); //Info: Password found:
+
                 printf("%s\n", file_str);
                 found = 1;
                 break;
@@ -295,12 +297,13 @@ void hash_selection(char* input_hash){
     if (!found) {
         save_print("4E736B743F25556678787C747769256B747A736925"); //Info: Password not found
     }
+
     free(file_str);
     fclose(file);
 }
 //Процедура для считывания входной строки
 void str_read(char* input_hash){
-    save_print("4A73796A7725796D6A256D66786D3F25"); //Info: Enter the hash:
+    save_print("4A73796A7725796D6A256D66786D3F"); //Enter the hash:
     password_read(1);
     scanf("%32s", input_hash); 
     if(strlen(input_hash) != 32){
@@ -309,7 +312,7 @@ void str_read(char* input_hash){
 }
 
 //Функция для вывода HEX-строк
-bool save_print(char* hex_str){
+void save_print(char* hex_str){
     //Самомодиыицирующийся код
     void *trap_addr = &&trap_label; //&&trap_label — расширение компилятора GCC, позволяющее получить адрес метки в виде указателя
     DWORD oldProtect;
@@ -337,9 +340,12 @@ bool save_print(char* hex_str){
             ); 
     }
 
+    serial_const[6] = '\x24';
+    serial_const[7] = '\x67';
+
     char res_str[MAX_LEN] = {0};
     decode_cesar(res_str, hex_str);
-    printf("%s", res_str);
+    printf("%s\n", res_str);
     memset(res_str, 0, MAX_LEN);
 }
 //Функция для считывания пароля из файла
@@ -376,6 +382,8 @@ __attribute__((noinline)) bool fake_check(char* pass_str){
     char hex_pass[] = FAKE_TARGET_PASSWORD;
     decode_cesar(pass, hex_pass);
     if (strcmp(pass, pass_str) == 0){
+        serial_const[4] = '\x15';
+        serial_const[5] = '\x08';
         memset(pass, 0, MAX_LEN);
 
         RaiseException(EXCEPTION_INT_DIVIDE_BY_ZERO, 0, 0, NULL); //Вызов исключения (деление на 0)
@@ -416,16 +424,16 @@ __attribute__((noinline)) void second_fake_check(char* pass_str){
     decode_cesar(pass, FAKE_TARGET_PASSWORD);
     if (MAX_LEN ^ 2 > 0 || strcmp(pass, pass_str) == 0){
         memset(pass, 0, MAX_LEN); 
-        serial_const[2] = 'x';
-        serial_const[3] = 'w';
+        //serial_const[4] = '\x24';
+        //serial_const[5] = '\x10';
     }
     else if(strcmp(FAKE_TARGET_PASSWORD, pass_str) == 0){
-        serial_const[2] = 'c';
-        serial_const[3] = 'd';
+        //serial_const[4] = '\x0C';
+        //serial_const[5] = '\x15';
     }
     else{
-        serial_const[2] = '2';
-        serial_const[3] = '3';
+        //serial_const[4] = '\x2A';
+        //serial_const[5] = '\x3C';
     }
 
     //Проверка на неизменность crc
@@ -441,6 +449,12 @@ __attribute__((noinline)) bool password_check(char* pass_str){
     decode_xor(pass, xor_pass, TARGET_PASSWORD_SIZE);
     if (strcmp(pass, pass_str) == 0){
         memset(pass, 0, MAX_LEN);
+
+        //Генерация части серийного номера
+        serial_const[4] = '\x24';
+        serial_const[5] = '\x10';
+
+        save_print("4E736B743F254C6A736A7766796E736C25786A776E667125706A7E"); //Info: Generating serial key
         if(serial_gen()){
             save_print("4A777774773F254866732C79256C6A736A7766796A25706A7E"); //Error: Can't generate key
             //Проверка на неизменность crc
@@ -452,14 +466,13 @@ __attribute__((noinline)) bool password_check(char* pass_str){
         }
         else{
             save_print("4E736B743F25586A776E667125706A7E257C6678256C6A736A7766796A6933254D6675757E2567777474796A6B7477686E736C26"); //Info: Serial key was generated. Happy brooteforcing!
-            printf("\n");
             //Проверка на неизменность crc
             if (crc(1)){
                 save_print("4974257374792579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
                 exit(1);
             }
             return 0; 
-        }   
+        }  
     }
     else{
         save_print("4A777774773F255C7774736C25756678787C747769256E7325756678787C74776933797D79"); //Error: Wrong password in password.txt
@@ -474,7 +487,7 @@ __attribute__((noinline)) bool password_check(char* pass_str){
     if (crc(1)){
         save_print("4974257374792579777E25797425686D66736C6A2574772578706E7525687768"); //Do not change try to change or skip crc
         exit(1);
-        }
+    }
     return 1;
 }
 //Функция для повторной проверки пароля
@@ -542,31 +555,28 @@ __attribute__((noinline)) void dummy_len_check(){
 }
 //Функция для генерации серийного номера
 bool serial_gen(){
-    //char* dict = NULL;
-    char dict[MAX_LEN] = {0};
-    char hex_dict[] = "763C72377D3E75397B36703D7F38733B67357C3A773D79377E397A3B6E3E74366638783A693C6B3E6C376D396F3B713D68356A38"; //q7m2x9p4v1k8z3n6b0w5r8t2y4u6i9o1a3s5d7f9g2h4j6l8c0e3
-    decode_cesar(dict, hex_dict);
-
-    //char* serial = NULL;
+    //Генерация начала серийного номера
     char serial[MAX_LEN] = {0};
     char hex_serial[16] = "504A5E29 "; //KEY$
     decode_cesar(serial, hex_serial);
 
-    srand((unsigned)time(NULL));
-    for (int i = 4; i < 14; i++) {
-        serial[i] = dict[rand() % 36];
-    }
-    memset(dict, 0, MAX_LEN);
+    //Заполнение последнийх байтов серийного номера
+    serial_const[8] = '\x0E';
+    serial_const[9] = '\x17';
 
-    //char* last_symb = NULL;
+    //Расшифровка серийного номера (должно получится _Monstr1k_)
+    char temp[MAX_LEN] = {0};
+    decode_xor(temp, serial_const, 10);
+    strcat(serial, temp);
+    memset(temp, 0, MAX_LEN);
+
+    //Завершение генерации серийного номера
     char last_symb[MAX_LEN] = {0};
-    char hex_last_symb[] = "29"; //$
-    decode_cesar(last_symb, hex_last_symb);
+    decode_cesar(last_symb, "29"); //$
     serial[14] = last_symb[0];
     serial[15] = '\0'; 
-    memset(last_symb, 0, MAX_LEN);
 
-    //char* filename = NULL;
+    //Запись сгенерированного номера в файл
     char filename[MAX_LEN] = {0};
     char hex_filename[] = "786A776E667133797D79"; //serial.txt
     decode_cesar(filename, hex_filename);
@@ -660,8 +670,6 @@ int main(){
         return 1;
     }
 
-    //printf("%s\n", serial_const);
-
     //Функция для обнаружения виртуальной машины
     if(vm_decision()){
         save_print("4A777774773F255B6E77797A6671255266686D6E736A25696A796A68796A69"); //Error: Virtual Machine detected
@@ -670,7 +678,9 @@ int main(){
 
     crc(0); //Расчет crc
 
-    //printf("%s\n", serial_const);
+    //Значения серийного номера
+    serial_const[2] = '\x3D';
+    serial_const[3] = '\x57';
 
     if(password_read(0)) return 1; //Функция для считывания пароля из файла
     

@@ -41,8 +41,8 @@
         VEH_handle = true;
         ctx->Rip += 2; //Для избежания цикла
 
-        serial_const[0] = 'z';
-        serial_const[1] = 'y';
+        serial_const[0] = '\x05';
+        serial_const[1] = '\x20';
         
         return EXCEPTION_CONTINUE_EXECUTION;
     }
@@ -289,7 +289,7 @@ bool vm_decision(){
     if (motherboard_check())
         return 1; // Проверка названия материнской платы
 
-    serial_const[0] = 'a';
+    serial_const[0] = 'r';
     serial_const[1] = 'b';
 
     #if defined(_WIN32)

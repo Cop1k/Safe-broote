@@ -34,14 +34,13 @@ void encrypt_and_print_cesar(char *str){
 int main(){
     //Строки для шифрования через XOR
     char *xor_strings[] = {
-        "qwerty",
-        "serial"
+        "",
     };
     int xor_count = sizeof(xor_strings) / sizeof(xor_strings[0]);
 
     //Строки для шифрования шифром Цезаря
     char *cesar_strings[] = {
-        "Debugging is bad"
+        ""
     };
     int cesar_count = sizeof(cesar_strings) / sizeof(cesar_strings[0]);
 
