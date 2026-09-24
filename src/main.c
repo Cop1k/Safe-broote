@@ -114,6 +114,17 @@ void md5(const unsigned char *input_str, int input_len, unsigned char *hash) {
     memcpy(changing_hash, input_str, input_len); //Копирование входного текста в созданную строку
     int current_len = input_len;
     
+    //Impossible Disassembly
+    __asm__ volatile(
+        "movw $0x05EB, %%ax \n\t" //mov ax, 0x05EB
+        "xorl %%eax, %%eax \n\t" //После операции Zero Flag = 1
+        "jz .-4 \n\t" //74 FA, это интерпритируется как прыжок на -6 байт
+        ".byte 0xE8 \n\t" //Мусорный байт
+        : //Входные параметры для кода
+        : //Выходные параметры для кода
+        : "eax", "cc" //Изменения в регистрах и флагах
+    );
+
     //1. Append Padding Bits
     changing_hash[current_len++] = 0x80; //Добавление бита '1' (байт 0x80)
     //Дополнение нулями до длины, сравнимой с 56 по модулю 64 (448 бит = 56 байт, 512 бит = 64 байт)
@@ -299,6 +310,33 @@ void str_read(char* input_hash){
 
 //Функция для вывода HEX-строк
 bool save_print(char* hex_str){
+    //Самомодиыицирующийся код
+    void *trap_addr = &&trap_label; //&&trap_label — расширение компилятора GCC, позволяющее получить адрес метки в виде указателя
+    DWORD oldProtect;
+
+    //Снятие защиты памяти
+    if (VirtualProtect(trap_addr, 2, PAGE_EXECUTE_READWRITE, &oldProtect)) {
+        //Перезапись кода
+        unsigned char *opcode = (unsigned char *)trap_addr; //Замена безусловного JMP (0xEB) на условный JZ (0x74)
+        *opcode = 0x74; 
+
+        VirtualProtect(trap_addr, 2, oldProtect, &oldProtect); //Восстановление старых прав памяти
+
+        //Модификация кода
+        __asm__ volatile (
+            "mov $1, %%eax \n\t" //Указатель на 1 в eax
+            "test %%eax, %%eax \n\t" //test 1, 1 -> Флаг нуля (ZF) становится равным 0
+            : //Входные параметры для кода
+            : //Выходные параметры для кода
+            : "eax", "cc" //Изменения в регистрах и флагах
+        );
+        //"Бесконечный цикл"
+        trap_label:
+            __asm__ volatile (
+                ".byte 0xEB, 0xFE \n\t" //jmp тут заменен на jz
+            ); 
+    }
+
     char res_str[MAX_LEN] = {0};
     decode_cesar(res_str, hex_str);
     printf("%s", res_str);
@@ -344,8 +382,6 @@ __attribute__((noinline)) bool fake_check(char* pass_str){
 
         if (isDebugged) {
             save_print("5879747525696A677A6C6C6E736C25726A26");
-            char arr[10];
-            scanf("%s", &arr);
             exit(1);
         }
         save_print("4A777774773F255C7774736C25756678787C747769256E7325756678787C74776933797D79"); //Error: Wrong password in password.txt
@@ -601,8 +637,21 @@ bool crc(bool mode){
 }
 
 int main(){
+    //Return Pointer Abuse
+    __asm__ volatile(
+        "call 1f \n\t" //Вызов метки "1"
+        "1: \n\t" //Адрес сохраняется в стек (из-за работы CALL)
+        "addq $(2f - 1b), (%%rsp) \n\t"  //Модификация адреса возврата (сложение числа, с вершины стека, с разницой адресов меток 2 и 1), $ - работа с константами, f - forward, b - backward
+        "ret \n\t" //Прыжок на модифицированный адрес
+        ".byte 0xE8 \n\t" // Мусорный CALL для добивания дизассемблера
+        "2: \n\t" //Реальный код
+        : //Входные параметры для кода
+        : //Выходные параметры для кода
+        : "cc" //Изменения в регистрах и флагах
+    );
+
     SetUnhandledExceptionFilter(debugg_checker); //Пользовательский обработчик прерываний
-    HMODULE hNtdll = GetModuleHandleW(L"ntdll.dll"); //Получение дескриптора уже загруженного в память процесса модуля (DLL)
+    HMODULE hNtdll = GetModuleHandleW(L"ntdll.dll"); //Получение дескриптора уже загруженного в память процесса модуля (DLL), L - закодировать строку в w_char
     if (hNtdll == NULL) {
         return 1;
     }
