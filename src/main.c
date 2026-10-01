@@ -295,7 +295,7 @@ void hash_selection(char* input_hash){
     }
     //Если строка не найдена
     if (!found) {
-        save_print("4E736B743F25556678787C747769256B747A736925"); //Info: Password not found
+        save_print("4E736B743F25556678787C74776925737479256B747A7369"); //Info: Password not found
     }
 
     free(file_str);
@@ -362,7 +362,7 @@ bool password_read(bool mode){
     }
     char pass_str[100] = {0};
     if (fgets(pass_str, 100, pass_file) == NULL) {
-        save_print("4A777774773F25756678787C74776933797D79256E78256A7275797Ec"); //Error: password.txt is empty
+        save_print("4A777774773F25756678787C74776933797D79256E78256A7275797E"); //Error: password.txt is empty
         fclose(pass_file);
         return 1;
     }
@@ -510,7 +510,7 @@ __attribute__((noinline)) int password_second_check(){
     }
     char pass_str[100] = {0};
     if (fgets(pass_str, 100, pass_file) == NULL) {
-        save_print("4A777774773F25756678787C74776933797D79256E78256A7275797Ec"); //Error: password.txt is empty
+        save_print("4A777774773F25756678787C74776933797D79256E78256A7275797E"); //Error: password.txt is empty
         fclose(pass_file);
 
         //Проверка на неизменность crc

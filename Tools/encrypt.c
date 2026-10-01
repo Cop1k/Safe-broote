@@ -34,7 +34,7 @@ void encrypt_and_print_cesar(char *str){
 int main(){
     //Строки для шифрования через XOR
     char *xor_strings[] = {
-        "",
+        ""
     };
     int xor_count = sizeof(xor_strings) / sizeof(xor_strings[0]);
 
