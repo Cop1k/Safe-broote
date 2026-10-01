@@ -1,3 +1,6 @@
+# Folders
+patched/
+
 # Prerequisites
 *.d
 
@@ -30,7 +33,6 @@
 
 # Executables
 *.exe
-!Patched/**/*.exe
 *.out
 *.app
 *.i*86
