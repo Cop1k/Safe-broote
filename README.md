@@ -56,6 +56,7 @@ cl /Fe:md5-broote.exe main.c vm_check.c decrypt.c ws2_32.lib iphlpapi.lib
 Требования:
 - `winsock2.h`, `windows.h`, `iphlpapi.h` (входят в Windows SDK)
 - `cpuid.h` (GCC) или `intrin.h` (MSVC)
+- В папке с собранным файлом должны быть словарь `Pwdb_top-10000000.txt` и файл с паролем `password.txt`. Пароль по умолчанию - `qwerty` 
 
 ---
 
